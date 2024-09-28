@@ -1,0 +1,66 @@
+# Disponivel em: https://www.facom.ufms.br/~ricardo/Courses/CompilerII/Material/VirtualMachines-tk.pdf pag 9
+# Ou no livro do Kowatoski na pagina 125
+
+# program Exemplo;
+#   var k: integer;
+#   procedure p(n: integer; var g: integer);
+#       var h: integer;
+#   begin
+#       if n<2 then g := g+n
+#           else begin
+#               h := g;
+#               p(n−1,h);
+#               g := h;
+#               p(n−2,g)
+#           end;
+#       write(n,g)
+#   end {p∗};
+# begin
+#   k := 0; p(3,k)
+# end.
+
+
+    INPP        # program
+    AMEM 1      # var k
+    DSVS L1
+L2: ENPR 1      # procedure p
+    AMEM 1      # var h
+    CRVL 1, -4
+    CRCT 2
+    CMME        # if n < 2
+    DSVF L3     # then
+    CRVI 1, -3
+    CRVL 1, -4
+    SOMA
+    ARMI 1, -3  # g := g + n
+    DSVS L4
+L3: NADA        # else
+    CRVI 1, -3
+    ARMZ 1, 0   # h := g
+    CRVL 1, -4
+    CRCT 1
+    SUBT
+    CREN 1, 0
+    CHPR L2     # p(n - 1, h)
+    CRVL 1, 0
+    ARMI 1, -3  # g := h
+    CRVL 1, -4
+    CRCT 2
+    SUBT
+    CRVL 1, -3
+    CHPR L2     # p(n - 2, g)
+L4: NADA
+    CRVL 1, -4
+    IMPR
+    CRVI 1, -3
+    IMPR        # write(n, g)
+    DMEM 1      # end
+    RTPR 1, 2
+L1: NADA
+    CRCT 0
+    ARMZ 0, 0   # k := 0
+    CRCT 3
+    CREN 0, 0
+    CHPR L2     # p(3, k)
+    DMEM 1      # end.
+    PARA
