@@ -1,9 +1,10 @@
+mod mepa;
+mod compiler;
+
 use std::path::PathBuf;
 
-use mepa::interactive_execution;
-
-mod mepa;
 fn main() {
 
-     interactive_execution( &PathBuf::from("samples/recursao.mepa"));
+     mepa::interactive_execution( &PathBuf::from("samples/c1.mepa"));
+     //compiler::compile(&PathBuf::from("samples/code.txt"), &PathBuf::from("output/code.mepa")).unwrap();     
 }

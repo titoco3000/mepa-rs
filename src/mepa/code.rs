@@ -1,13 +1,18 @@
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
+use std::usize;
 use super::instruction::Instruction;
 use super::label::Label;
 
 pub struct MepaCode(pub Vec<(Option<Label>, Instruction)>);
 
 impl MepaCode {
+    pub fn with_capacity(capacity: usize)->MepaCode{
+        MepaCode(Vec::with_capacity(capacity))
+    }
     pub fn insert(&mut self, new: (Option<Label>, Instruction)) {
+        println!("{:?}",new);
         self.0.push(new);
     }
 

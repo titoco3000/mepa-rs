@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 use super::code::MepaCode;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Label {
     Simbolic(String),
     Literal(usize),
@@ -24,6 +24,9 @@ impl Label {
             }
             Self::Literal(u) => Some(*u),
         }
+    }
+    pub fn new(id:usize)->Label{
+        Self::Simbolic(format!("L{}",id))
     }
 }
 impl FromStr for Label {

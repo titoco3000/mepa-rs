@@ -103,6 +103,7 @@ impl<'a> MepaMachine<'a> {
                     self.i += 1;
                 }
                 Instruction::ARMZ(m, n) => {
+                    println!("Em ARMZ destino:{}",self.d[*m as usize] + n);
                     self.m[(self.d[*m as usize] + n) as usize] = self.m[self.s as usize];
                     self.s -= 1;
                     self.i += 1;
