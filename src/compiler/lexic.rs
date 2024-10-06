@@ -35,7 +35,7 @@ pub enum Token {
     Else,
     While,
     Return,
-    Function
+    Function,
 }
 
 #[macro_export]
@@ -48,8 +48,8 @@ macro_rules! is_token {
 #[macro_export]
 macro_rules! ensure_is_token {
     ($x:expr, $p:pat) => {
-        if !matches!($x, Some($p)){
-            panic!("Got {:?}, expected something else",$x.unwrap());
+        if !matches!($x, Some($p)) {
+            panic!("Got {:?}, expected something else", $x.unwrap());
         }
     };
 }
@@ -63,13 +63,14 @@ impl Reader {
     pub fn new(file_path: &PathBuf) -> Reader {
         let file = File::open(file_path).expect("unable to open file");
         let mut reader = BufReader::new(file);
-        let mut single_char = [0; 1]; // Buffer for reading one byte at a time        
+        let mut single_char = [0; 1]; // Buffer for reading one byte at a time
         Reader {
             next_char: {
-                if reader.read(&mut single_char).unwrap() == 0{
+                if reader.read(&mut single_char).unwrap() == 0 {
                     panic!("Error on first character");
                 }
-                char::from_u32(single_char[0] as u32)},
+                char::from_u32(single_char[0] as u32)
+            },
             reader,
         }
     }
@@ -88,151 +89,182 @@ impl Reader {
     }
 
     pub fn get_next_token(&mut self) -> Result<Option<Token>, &str> {
-        let mut buffer = Vec::new();
-        let mut in_comment = false;
-        while let Some(lookahead) = self.next_char {
-            if in_comment {
-                if lookahead == '\n' {
-                    in_comment = false;
+        //skip whitespaces
+        loop{
+            if let Some(c) = self.next_char {
+                if c.is_whitespace(){
+                    self.consume_char();
+                    continue;
                 }
-                self.consume_char();
-            } else {
-                // all special pairs (==, !=, &&, ||, >=, <=, //)
-                if buffer.len() == 1 {
-                    if buffer[0] == '=' {
-                        return Ok(Some(if lookahead == '=' {
-                            self.consume_char();
-                            Token::Equals
+            }
+            break;
+        }
+        
+        if let Some(c) = self.next_char {
+            self.consume_char();
+            //single character tokens
+            match c {
+                '(' => Ok(Some(Token::OpenParenthesis)),
+                ')' => Ok(Some(Token::CloseParenthesis)),
+                '{' => Ok(Some(Token::OpenBraces)),
+                '}' => Ok(Some(Token::CloseBraces)),
+                ',' => Ok(Some(Token::Comma)),
+                ';' => Ok(Some(Token::SemiColon)),
+                '+' => Ok(Some(Token::Plus)),
+                '-' => Ok(Some(Token::Minus)),
+                '*' => Ok(Some(Token::Asterisc)),
+                _ => {
+                    if c == '/' {
+                        //into comment
+                        if self.next_char.is_some() && self.next_char.unwrap() == '/' {
+                            while self.next_char.is_some() && self.next_char.unwrap() != '\n' {
+                                self.consume_char();
+                            }
+                            self.get_next_token()
+                        } else if self.next_char.is_some() && self.next_char.unwrap() == '*' {
+                            loop {
+                                if let Some(c) = self.next_char {
+                                    self.consume_char();
+                                    if c == '*' {
+                                        if self.next_char.is_some()
+                                            && self.next_char.unwrap() == '/'
+                                        {
+                                            self.consume_char();
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    return Err("Unfinished multi-line comment");
+                                }
+                            }
+                            self.get_next_token()
                         } else {
-                            Token::Assign
-                        }));
-                    } else if buffer[0] == '!' {
-                        return Ok(Some(if lookahead == '=' {
-                            self.consume_char();
-                            Token::Different
-                        } else {
-                            Token::Not
-                        }));
-                    } else if buffer[0] == '&' {
-                        return Ok(Some(if lookahead == '&' {
-                            self.consume_char();
-                            Token::And
-                        } else {
-                            Token::AddressOf
-                        }));
-                    } else if buffer[0] == '|' {
-                        return if lookahead == '|' {
-                            self.consume_char();
-                            Ok(Some(Token::Or))
-                        } else {
-                            Err("Parse error")
-                        };
-                    } else if buffer[0] == '>' {
-                        return Ok(Some(if lookahead == '=' {
-                            self.consume_char();
-                            Token::GreaterOrEqualThan
-                        } else {
-                            Token::GraterThan
-                        }));
-                    } else if buffer[0] == '<' {
-                        return Ok(Some(if lookahead == '=' {
-                            self.consume_char();
-                            Token::LesserOrEqualThan
-                        } else {
-                            Token::LesserThan
-                        }));
-                    } else if buffer[0] == '/' {
-                        if lookahead == '/'{
-                            in_comment = true;
-                        }
-                        else{
                             return Ok(Some(Token::Division));
                         }
                     }
-                }
-
-                //characters from numbers and identifiers
-                if lookahead.is_alphanumeric() || lookahead == '_' {
-                    buffer.push(lookahead);
-                    self.consume_char();
-                }
-                 else if buffer.len() > 0 {
-                    let s: String = buffer.iter().collect();
-                    buffer.clear();
-                    if let Some(keyword) = match s.as_str() {
-                        "int" => Some(Token::Int),
-                        "ptr" => Some(Token::Ptr),
-                        "print" => Some(Token::Print),
-                        "read" => Some(Token::Read),
-                        "if" => Some(Token::If),
-                        "else" => Some(Token::Else),
-                        "while" => Some(Token::While),
-                        "return" => Some(Token::Return),
-                        "fn" => Some(Token::Function),
-                        _ => None,
-                    } {
-                        return Ok(Some(keyword));
-                    } else if let Ok(n) = s.parse::<i32>() {
-                        return Ok(Some(Token::Number(n)));
-                    } else {
-                        return Ok(Some(Token::Identifier(s)));
+                    //equals and assign
+                    else if c == '=' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '=' {
+                            self.consume_char();
+                            Ok(Some(Token::Equals))
+                        } else {
+                            Ok(Some(Token::Assign))
+                        }
                     }
-                } else {
-                    self.consume_char();
-                    if let Some(single) = match lookahead {
-                        '+' => Some(Token::Plus),
-                        '-' => Some(Token::Minus),
-                        '*' => Some(Token::Asterisc),
-                        '>' => Some(Token::GraterThan),
-                        '<' => Some(Token::LesserThan),
-                        '(' => Some(Token::OpenParenthesis),
-                        ')' => Some(Token::CloseParenthesis),
-                        '{' => Some(Token::OpenBraces),
-                        '}' => Some(Token::CloseBraces),
-                        ',' => Some(Token::Comma),
-                        ';' => Some(Token::SemiColon),
-                        _ => None,
-                    } {
-                        return Ok(Some(single));
+                    //not and different
+                    else if c == '!' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '=' {
+                            self.consume_char();
+                            Ok(Some(Token::Different))
+                        } else {
+                            Ok(Some(Token::Not))
+                        }
                     }
-                    else{
-                        if !lookahead.is_whitespace(){
-                            buffer.push(lookahead);
+                    //or
+                    else if c == '|' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '|' {
+                            self.consume_char();
+                            Ok(Some(Token::Or))
+                        } else {
+                            Err("Expected '|'")
+                        }
+                    }
+                    //or
+                    else if c == '&' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '&' {
+                            self.consume_char();
+                            Ok(Some(Token::And))
+                        } else {
+                            Ok(Some(Token::AddressOf))
+                        }
+                    }
+                    // < and <=
+                    else if c == '<' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '=' {
+                            self.consume_char();
+                            Ok(Some(Token::LesserOrEqualThan))
+                        } else {
+                            Ok(Some(Token::LesserThan))
+                        }
+                    }
+                    // > and >=
+                    else if c == '>' {
+                        if self.next_char.is_some() && self.next_char.unwrap() == '=' {
+                            self.consume_char();
+                            Ok(Some(Token::GreaterOrEqualThan))
+                        } else {
+                            Ok(Some(Token::GraterThan))
+                        }
+                    }
+                    // identifiers, numbers and keywords
+                    else {
+                        let mut buffer = Vec::with_capacity(64);
+                        if c.is_alphanumeric() || c == '_' {
+                            buffer.push(c);
+                            while self.next_char.is_some()
+                                && (self.next_char.unwrap().is_alphanumeric()
+                                    || self.next_char.unwrap() == '_')
+                            {
+                                buffer.push(self.next_char.unwrap());
+                                self.consume_char();
+                            }
+                            let s: String = buffer.iter().collect();
+                            if let Some(keyword) = match s.as_str() {
+                                "int" => Some(Token::Int),
+                                "ptr" => Some(Token::Ptr),
+                                "print" => Some(Token::Print),
+                                "read" => Some(Token::Read),
+                                "if" => Some(Token::If),
+                                "else" => Some(Token::Else),
+                                "while" => Some(Token::While),
+                                "return" => Some(Token::Return),
+                                "fn" => Some(Token::Function),
+                                _ => None,
+                            } {
+                                Ok(Some(keyword))
+                            } else if let Ok(n) = s.parse::<i32>() {
+                                Ok(Some(Token::Number(n)))
+                            } else {
+                                Ok(Some(Token::Identifier(s)))
+                            }
+                        } else {
+                            println!("Unexpected char: '{}'", c);
+                            Err("Unexpected char")
                         }
                     }
                 }
             }
+        } else {
+            Ok(None)
         }
-        Ok(None)
     }
-
 }
 
 #[derive(Debug)]
 pub struct Lexic(Vec<Token>);
 
 impl Lexic {
-    pub fn new(file_path: &PathBuf) ->Lexic{
+    pub fn new(file_path: &PathBuf) -> Lexic {
         let mut list = Vec::with_capacity(128);
 
         let mut l = Reader::new(file_path);
-    
+
         while let Some(token) = l.get_next_token().unwrap() {
             list.push(token);
         }
-    
+
         list = list.into_iter().rev().collect();
-    
+
         Lexic(list)
     }
 
-    pub fn next(&self) -> Option<&Token>{
+    pub fn next(&self) -> Option<&Token> {
         self.0.last()
     }
-    pub fn next_to_next(&self) -> Option<&Token>{
-        self.0.get(self.0.len()-2)
+    pub fn next_to_next(&self) -> Option<&Token> {
+        self.0.get(self.0.len() - 2)
     }
-    pub fn consume(&mut self) -> Token{
+    pub fn consume(&mut self) -> Token {
         self.0.pop().unwrap()
     }
 }
