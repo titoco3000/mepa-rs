@@ -34,6 +34,7 @@ impl Compiler {
 
         //after defining the functions, there should be no token left
         if let None = self.tokens.next() {
+            self.generated_code.insert((None, Instruction::AMEM(1)));            
             self.generated_code.insert((
                 None,
                 Instruction::CHPR(Label::new(self.simbols.get_fn_label("main").unwrap())),
@@ -467,6 +468,7 @@ impl Compiler {
 
 pub fn compile(origin: &PathBuf, target: &PathBuf) -> io::Result<()> {
     let mut c = Compiler::new(origin);
+    println!("{:?}",c.tokens);
     c.program();
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
