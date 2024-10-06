@@ -64,16 +64,14 @@ impl Reader {
         let file = File::open(file_path).expect("unable to open file");
         let mut reader = BufReader::new(file);
         let mut single_char = [0; 1]; // Buffer for reading one byte at a time        
-        let mut l = Reader {
+        Reader {
             next_char: {
                 if reader.read(&mut single_char).unwrap() == 0{
                     panic!("Error on first character");
                 }
                 char::from_u32(single_char[0] as u32)},
             reader,
-        };
-
-        l
+        }
     }
 
     fn consume_char(&mut self) {
