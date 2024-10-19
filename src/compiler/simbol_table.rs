@@ -1,6 +1,22 @@
+#[derive(Clone, Copy)]
+pub enum VarType{
+    Int,
+    Ptr
+}
+pub struct Variable{
+    name: String,
+    address: i32,
+    var_type: VarType
+}
+impl  Variable {
+    pub fn new(name:String, address:i32, var_type:VarType)->Variable{
+        Variable { name, address, var_type }
+    }
+}
+
 struct SemanticLevel {
     function_name: Option<String>, //if None, is global
-    variables: Vec<(String, i32)>,
+    variables: Vec<Variable>,
 }
 impl SemanticLevel {
     pub fn new(function_name: Option<String>) -> SemanticLevel {
@@ -32,21 +48,20 @@ impl SimbolTable {
     pub fn new_variable(
         &mut self,
         function_name: Option<String>,
-        variable_name: String,
-        adress: i32,
+        variable: Variable
     ) -> Result<(), &str> {
         for level in &mut self.levels {
             if level.function_name == function_name {
-                return if level.variables.iter().any(|b| &b.0 == &variable_name) {
+                return if level.variables.iter().any(|b| &b.name == &variable.name) {
                     Err("Redeclaration of variable")
                 } else {
-                    level.variables.push((variable_name, adress));
+                    level.variables.push(variable);
                     Ok(())
                 };
             }
         }
         let mut sm: SemanticLevel = SemanticLevel::new(function_name);
-        sm.variables.push((variable_name, adress));
+        sm.variables.push(variable);
         self.levels.push(sm);
         Ok(())
     }
@@ -60,19 +75,19 @@ impl SimbolTable {
         }
     }
 
-    pub fn get_var_addr(&self, var: &str, function_name: Option<String>) -> Option<(i32, i32)> {
+    pub fn get_var_addr_and_type(&self, var: &str, function_name: Option<String>) -> Option<(i32, i32, VarType)> {
         for level in &self.levels {
             if level.function_name == function_name {
                 for variable in &level.variables {
-                    if variable.0 == var {
-                        return Some((if function_name.is_some() { 1 } else { 0 }, variable.1));
+                    if variable.name == var {
+                        return Some((if function_name.is_some() { 1 } else { 0 }, variable.address, variable.var_type));
                     }
                 }
             }
         }
         if function_name.is_some(){
             //try to find in global
-            self.get_var_addr(var, None)
+            self.get_var_addr_and_type(var, None)
         }
         else{
             None
