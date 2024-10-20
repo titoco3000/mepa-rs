@@ -36,8 +36,8 @@ fn main() {
     let input_path = PathBuf::from(matches.get_one::<String>("input").unwrap());
     let output_path = matches
         .get_one::<String>("output")
-        .map(|s| PathBuf::from(s))
-        .unwrap_or_else(|| PathBuf::from("output/sample.mepa"));
+        .map(|s| Some(PathBuf::from(s)))
+        .unwrap_or_else(|| None);
 
     let input_values: Vec<i32> = matches
         .get_many::<String>("input_values")
@@ -56,11 +56,20 @@ fn main() {
             let entry = entry.unwrap();
             let file_path = entry.path();
             if file_path.is_file() {
-                handle_action(action, &file_path, &output_path, should_run, should_test, &input_values);
+                let p = match &output_path {
+                    Some(p)=>p.clone(),
+                    None=>{ let mut p = PathBuf::from("output"); p.push(format!("{}.mepa",file_path.file_stem().unwrap().to_str().unwrap())); p}
+                };
+                println!("Fazendo para {:?}",p);
+                handle_action(action, &file_path, &p, should_run, should_test, &input_values);                    
             }
         }
     } else {
-        handle_action(action, &input_path, &output_path, should_run, should_test, &input_values);
+        let p = match output_path {
+            Some(p)=>p,
+            None=>{ let mut p = PathBuf::from("output"); p.push(format!("{}.mepa",input_path.file_stem().unwrap().to_str().unwrap())); p}
+        };
+        handle_action(action, &input_path, &p, should_run, should_test, &input_values);
     }
 }
 
