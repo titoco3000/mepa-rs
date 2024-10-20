@@ -39,9 +39,9 @@ impl Compiler {
                 None,
                 Instruction::CHPR(Label::new(self.simbols.get_fn_label("main").unwrap())),
             ));
-            //libera as variaveis globais + var reservada para offset + variavel de retorno da main
+            //libera as variaveis globais + vars reservada para offset + variavel de retorno da main
             self.generated_code
-                .insert((None, Instruction::DMEM(global_vars as i32 + 2)));
+                .insert((None, Instruction::DMEM(global_vars as i32 + 3)));
             self.generated_code.insert((None, Instruction::PARA));
         } else {
             panic!("Extra tokens");
@@ -94,7 +94,7 @@ impl Compiler {
             self.current_function = None;
 
             self.generated_code
-                .insert((None, Instruction::DMEM(local_vars as i32 + 1)));
+                .insert((None, Instruction::DMEM(local_vars as i32 + 2)));
             self.generated_code
                 .insert((None, Instruction::RTPR(1, l as i32)));
             self.generated_code
@@ -111,9 +111,10 @@ impl Compiler {
         }
 
         let l: usize = (v.iter().map(|(_, _, value)| value).sum::<i32>()) as usize;
+        //reserva duas variaveis para  calculo de offsets de array: uma para lvalue e outra para rvalue
         self.generated_code
-            .insert((None, Instruction::AMEM(l as i32 + 1)));
-        let mut acumulator = 1;
+            .insert((None, Instruction::AMEM(l as i32 + 2))); 
+        let mut acumulator = 2;
         for (var_type, name, size) in v.into_iter() {
             self.simbols
                 .new_variable(
@@ -233,13 +234,17 @@ impl Compiler {
     fn attribuition(&mut self) {
         ensure_is_token!(self.tokens.next(), Token::Identifier(_));
         if let Token::Identifier(s) = self.tokens.consume() {
-            let (m, n, _) = self
+            let (m, n, t) = self
                 .simbols
                 .get_var_addr_and_type(&s, self.current_function.clone())
                 .unwrap();
             if is_token!(self.tokens.next(), Token::OpenBrackets) {
                 self.tokens.consume();
-                self.generated_code.insert((None, Instruction::CREN(m, n)));
+                
+                self.generated_code.insert((None, match t {
+                    VarType::Int =>  Instruction::CREN(m, n),
+                    VarType::Ptr =>  Instruction::CRVL(m, n)
+                }));
                 self.expression();
                 self.generated_code.insert((None, Instruction::SOMA));
                 self.generated_code.insert((
@@ -250,7 +255,7 @@ impl Compiler {
                         } else {
                             1
                         },
-                        0,
+                        1, //guarda endereço na pos reservada para lvalue
                     ),
                 ));
 
@@ -268,7 +273,7 @@ impl Compiler {
                         } else {
                             1
                         },
-                        0,
+                        1, //guarda endereço na pos reservada para lvalue
                     ),
                 ));
             } else {

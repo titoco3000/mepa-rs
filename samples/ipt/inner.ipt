@@ -1,0 +1,7 @@
+fn main(){
+    int arr[2], x;
+    arr[0] = 20;
+    arr[1] = 0;
+    x = arr[arr[1]];
+    return x;
+}
