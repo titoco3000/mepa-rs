@@ -12,7 +12,7 @@ impl MepaCode {
         MepaCode(Vec::with_capacity(capacity))
     }
     pub fn insert(&mut self, new: (Option<Label>, Instruction)) {
-        println!("{:?}",new);
+        //println!("{:?}",new);
         self.0.push(new);
     }
 

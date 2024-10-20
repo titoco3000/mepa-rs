@@ -669,7 +669,6 @@ impl Compiler {
 
 pub fn compile(origin: &PathBuf, target: &PathBuf) -> io::Result<()> {
     let mut c = Compiler::new(origin);
-    println!("{:?}", c.tokens);
     c.program();
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent)?;
@@ -695,7 +694,9 @@ pub fn compile(origin: &PathBuf, target: &PathBuf) -> io::Result<()> {
         })
         .collect();
 
+    println!("Compilado com sucesso!");
     write_matrix(&matrix, file)
+
 }
 
 fn write_matrix(matrix: &Vec<Vec<String>>, file: File) -> io::Result<()> {

@@ -1,6 +1,41 @@
-use super::code::MepaCode;
-use super::instruction::Instruction;
-use super::utills::{input_i32, print_matrix};
+use crate::mepa::code::MepaCode;
+use crate::mepa::instruction::Instruction;
+use crate::utils::{print_matrix, input_i32};
+
+use std::{io::{self, BufReader, Read}, path::PathBuf};
+
+enum InputSource {
+    Vec(Vec<i32>),
+    Readable(Box<dyn Read>),
+    Stdin
+}
+impl InputSource {
+    pub fn readable<R: Read + 'static>(readable: R) -> Self {
+        InputSource::Readable(Box::new(readable))
+    }
+    pub fn read(&mut self) -> Option<i32> {
+        match self {            
+            Self::Vec(v) => if v.len()>1 {v.pop()}else{v.get(0).copied()},
+            
+            Self::Stdin => {
+                Some(input_i32())
+            }
+            
+            Self::Readable(readable) => {
+                let mut buf_reader = BufReader::new(readable);
+                let mut buffer = String::new();
+
+                if buf_reader.read_to_string(&mut buffer).is_ok() {
+                    buffer.split_whitespace()
+                        .next()
+                        .and_then(|s| s.parse::<i32>().ok())
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
 
 pub struct MepaMachine<'a> {
     code: MepaCode,
@@ -8,7 +43,7 @@ pub struct MepaMachine<'a> {
     d: Vec<i32>,                      //auxiliary
     i: usize,                         //next instruction
     s: i32,                           //next memory addr
-    input: Option<Vec<i32>>,          // input (if none, will ask in stdin)
+    input: InputSource,               // input source
     output: Option<&'a mut Vec<i32>>, // output (if none, will print to stdout)
 }
 
@@ -25,10 +60,19 @@ impl<'a> MepaMachine<'a> {
             d,
             i: 0,
             s: -1,
-            input: None,
+            input: InputSource::Stdin,
             output: None,
         }
     }
+    pub fn add_input_vec(mut self, input:Vec<i32>) -> Self{
+        self.input = InputSource::Vec(input);
+        self
+    }
+    pub fn add_input<R: Read + 'static>(mut self, readable: R) -> Self {
+        self.input = InputSource::readable(readable);
+        self
+    }
+
     pub fn ended(&self) -> bool {
         if let Instruction::PARA = self.code.0[self.i].1 {
             true
@@ -244,15 +288,7 @@ impl<'a> MepaMachine<'a> {
                 Instruction::PARA => (),
                 Instruction::LEIT => {
                     self.s += 1;
-                    self.m[self.s as usize] = if let Some(v) = &mut self.input {
-                        let temp = v[0];
-                        if v.len() > 1 {
-                            v.remove(0);
-                        }
-                        temp
-                    } else {
-                        input_i32()
-                    };
+                    self.m[self.s as usize] = self.input.read().expect("Erro no input");
                     self.i += 1;
                 }
                 Instruction::IMPR => {
@@ -299,4 +335,40 @@ impl<'a> MepaMachine<'a> {
             Err("End of instructions without PARA")
         }
     }
+
+    pub fn execute(&mut self)-> Result<(), String>{
+        while !self.ended() {            
+            self.execute_step()?;
+        }
+        Ok(())
+    }    
+    
+}
+
+pub fn interactive_execution(filename: &PathBuf, input:Vec<i32>) {
+    let mc = MepaCode::from_file(filename).unwrap();
+    let mut machine = MepaMachine::new(mc);
+    if input.len()>0{
+        machine = machine.add_input_vec(input);
+    }
+    let mut input_line = String::new();
+
+    while !machine.ended() {
+        machine.show_state(None);
+        machine.execute_step().unwrap();
+        io::stdin()
+            .read_line(&mut input_line)
+            .expect("Failed to read line");
+    }
+    machine.show_state(None);
+    println!("Program executed successfully");
+}
+
+pub fn execute(filename: &PathBuf, input:Vec<i32>) {
+    let mc = MepaCode::from_file(filename).unwrap();
+    let mut machine = MepaMachine::new(mc);
+    if input.len()>0{
+        machine = machine.add_input_vec(input);
+    }
+    machine.execute().unwrap();
 }
