@@ -9,6 +9,12 @@ Este projeto é parte do meu TCC, com o título "Implementação de otimizacões
 
 MEPA (Máquina de Execução de PAscal) é uma linguagem intermediária criada pelo prof. Tomasz Kowatoski.
 
+É uma linguagem de pilha didática, e possui:
+* um vetor M, como a pilha de memória principal
+* um vetor D, como registro de níveis
+* um registrador i que aponta para a próxima instrução
+* um registrador s que aponta para o topo de M
+
 ### Instruções
  No livro *Implementação de Linguagens de Programação*, a liguagem é descrita incrementalmente; as instruções aceitas pelo programa estão descritas abaixo.
  
@@ -132,4 +138,4 @@ Quando input não for especificado, `LEIT` vai pedir entrada pelo stdin.
 ```
 $ cargo run -- compile samples/ipt 
 ```
-Nesse modo, se for especificado -o, ele será sequencialmente sobreescrito.
+Nesse modo, todas as opções passadas (-o, --test, etc) são aplicadas sequencialmente em cada arquivo.
