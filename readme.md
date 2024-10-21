@@ -74,7 +74,7 @@ Em cada linha, qualquer texto depois de ```#``` ou ```//``` é considerado como 
 
 ## Compilador
 
-O funcionamento interno do compilador que transforma ipt em MEPA está descrito em `src/compiler/readme.md`, bem como a gramática da linguagem.
+A linguagem *ipt* e o compilador que produz MEPA está descrito no seu próprio [readme](src/compiler/readme.md).
 
 ## Máquina
 

@@ -14,7 +14,7 @@
 
 <declaration> ::= <vartype> <identifier> [ "[" <number> "]" ] { "," <identifier> [ "[" <number> "]" ]} ";"
 
-<attribuition> ::= <identifier> [ "[" <expression> "]" ] "=" <expression>
+<attribuition> ::= ["*"] <identifier> [ "[" <expression> "]" ] "=" <expression>
 
 <expression> ::= <logic_expr> { "||" <logic_expr> }
 

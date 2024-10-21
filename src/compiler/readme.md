@@ -152,7 +152,7 @@ read(arr[i]);
 
 ## Arrays e Ponteiros
 
-A linguagem *ipt* suporta arrays estáticos de inteiros. Os arrays são indexados de forma similar a C, e a indexação de ponteiros faz automaticamente a desreferenciação.
+A linguagem *ipt* suporta arrays estáticos de inteiros. Os arrays funcionam semelhante a arrays em C: ao declarar uma variável como um array, na verdade essa variável contém um pointer para o primeiro item do array. Ao acessar, estamos fazendo a derefencia com um offset.
 
 ### Declaração de Arrays
 
@@ -164,21 +164,24 @@ int arr[5];
 
 ### Uso de Ponteiros
 
-Ponteiros podem ser passados como argumentos de função ou usados para acessar arrays.
+Os ponteiros podem ser derefenciados diretamente ou pelo uso da indexação:
 
 ```c
 int x;
 ptr p;
-p = &arr;
-p[0] = 1;
-x = *p //x = 1
+p = &x;
+x = 12;
+print(p)        // &x
+print(p[0])     // 12
+print(*p)       // 12
+*p = 13         //x = 13
 ```
 
 ---
 
 ## Geração de Código MEPA
 
-O compilador gera código intermediário MEPA. MEPA é uma linguagem de pilha, e para mais informações sobre ela, consulte o [readme principal](../../readme.md). A maioria das traduções é bastante simples, como o exemplo a seguir de uma condicional:
+O compilador gera código intermediário MEPA. MEPA é uma linguagem de pilha; para mais informações sobre ela, consulte o [readme principal](../../readme.md). A maioria das traduções é bastante simples, como o exemplo a seguir de uma condicional:
 ```
 if(2<3){            CRCT 2
     print(2);       CRCT 3
@@ -188,10 +191,14 @@ if(2<3){            CRCT 2
                     IMPR
                 L1: NADA
 ```
-Mas as chamadas de funções e a indexação são mais complexas. 
+Mas as chamadas de funções, declaração de arrays e indexação são mais complexas. 
 
 ### Funções
 Ao chamar uma função, primeiro precisamos reservar uma posição na pilha para o retorno. Se a função possui argumentos, eles são empilhados e serão acessados dentro do corpo da função usando endereços negativos (usando o nível léxico, eles vão se tornar positivos. Consulte a [tabela](../../readme.md) que especifica as instruções). Dentro do corpo da função (iniciado por `ENPR`), são reservadas duas variáveis, que são usadas na indexação.
+
+### Declaração de arrays
+
+Ao declarar um array de N elementos, são reservados N+1. O primeiro imediatamente recebe o endereço do próximo, e ele que é a "raiz" do array. Isso poderia ser resolvido de outra maneira, substituindo referencias ao array por referencias ao seu endereço, mas fazendo assim facilita.
 
 ### Indexação
 Como essa versão da MEPA não tem instruções específicas para acesso relativo (a menos não diretamente), é preciso fazer um caminho alternativo. Primeiro calculamos o endereço do array; se estamos indexando um `int` usamos `CREN`, se estamos indexando um `ptr` usamos `CRVL`, para fazer a dereferencia. Tendo esse endereço, somamos ao índice e salvamos numa das variáveis reservadas para indexação. São reservadas duas: uma para conter o endereço de rvalue, outra para o endereço de lvalue. 

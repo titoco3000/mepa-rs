@@ -1,0 +1,15 @@
+fn get(ptr a){
+    print(a[0]);
+    print(*a[0]);
+    *a[0] = 3;
+    return 2;
+}
+
+fn main(){
+    int x;
+    int arr[4];
+    x = 13;
+    arr[0] = &x;
+    arr[1] = 22;
+    return get(arr);
+}

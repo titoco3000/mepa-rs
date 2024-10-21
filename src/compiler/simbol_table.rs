@@ -1,7 +1,8 @@
 #[derive(Clone, Copy)]
 pub enum VarType{
     Int,
-    Ptr
+    Ptr,
+    Array
 }
 pub struct Variable{
     name: String,

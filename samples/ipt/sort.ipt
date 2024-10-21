@@ -40,8 +40,9 @@ fn main(){
     // ref[1] = 1;
     // ref[2] = 3;
 
-    x = bubble_sort(&arr, 3);
-    x = print_arr(&arr, 3);
+    x = print_arr(arr, 3);
+    x = bubble_sort(arr, 3);
+    x = print_arr(arr, 3);
 
     return 1;
 }
