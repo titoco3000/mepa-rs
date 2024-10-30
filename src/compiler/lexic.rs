@@ -49,9 +49,10 @@ macro_rules! is_token {
 
 #[macro_export]
 macro_rules! ensure_is_token {
-    ($x:expr, $p:pat) => {
-        if !matches!($x, Some($p)) {
-            panic!("Got {:?}, expected something else", $x.unwrap());
+    ($option:expr, $expected:pat_param) => {
+        match $option {
+            Some($expected) => {},
+            _ => return Err(CompileError::ExpectedToken(stringify!($expected))),
         }
     };
 }

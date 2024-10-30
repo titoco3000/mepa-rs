@@ -1,5 +1,4 @@
-use std::fs::{self, File};
-use std::io::{self, Write};
+use std::io;
 use std::path::PathBuf;
 
 use crate::mepa::label::Label;
@@ -7,6 +6,7 @@ use crate::{ensure_is_token, is_token, mepa::instruction::Instruction};
 
 use super::lexic::{Lexic, Token};
 use super::simbol_table::{SimbolTable, VarType, Variable};
+use super::error::CompileError;
 use crate::mepa::code::MepaCode;
 
 struct Compiler {
@@ -25,9 +25,9 @@ impl Compiler {
         }
     }
 
-    fn program(&mut self) {
+    fn program(&mut self) -> Result<(), CompileError> {
         self.generated_code.insert((None, Instruction::INPP));
-        let global_vars = self.declarations();
+        let global_vars = self.declarations()?;
         while is_token!(self.tokens.next(), Token::Function) {
             self.function_def();
         }
@@ -43,12 +43,13 @@ impl Compiler {
             self.generated_code
                 .insert((None, Instruction::DMEM(global_vars as i32 + 3)));
             self.generated_code.insert((None, Instruction::PARA));
+            Ok(())
         } else {
-            panic!("Extra tokens");
+            Err(CompileError::Sintatic("Extra tokens depois do final do programa".to_owned()))
         }
     }
 
-    fn function_def(&mut self) {
+    fn function_def(&mut self) -> Result<(), CompileError>{
         ensure_is_token!(self.tokens.next(), Token::Function);
         self.tokens.consume();
         if let Token::Identifier(id) = self.tokens.consume() {
@@ -103,7 +104,7 @@ impl Compiler {
             panic!("Should be identifier");
         }
     }
-    fn declarations(&mut self) -> usize {
+    fn declarations(&mut self) -> Result<usize, CompileError> {
         let mut v = Vec::with_capacity(8);
         while is_token!(self.tokens.next(), Token::Int) || is_token!(self.tokens.next(), Token::Ptr)
         {
@@ -132,7 +133,7 @@ impl Compiler {
         }
         l
     }
-    fn commands(&mut self) {
+    fn commands(&mut self) -> Result<(), CompileError>{
         while is_token!(self.tokens.next(), Token::OpenBraces)
             || is_token!(self.tokens.next(), Token::Identifier(_))
             || is_token!(self.tokens.next(), Token::Asterisc)
@@ -144,14 +145,14 @@ impl Compiler {
             self.command();
         }
     }
-    fn vartype(&mut self) -> VarType {
+    fn vartype(&mut self) -> Result<VarType, CompileError> {
         match self.tokens.consume() {
             Token::Int => VarType::Int,
             Token::Ptr => VarType::Ptr,
             _ => panic!("no reasonable type"),
         }
     }
-    fn parameter_list(&mut self) -> Vec<(VarType, String)> {
+    fn parameter_list(&mut self) -> Result<Vec<(VarType, String)>, CompileError> {
         let mut v = Vec::with_capacity(8);
         if is_token!(self.tokens.next(), Token::Int) || is_token!(self.tokens.next(), Token::Ptr) {
             let var_type = match self.tokens.consume() {
@@ -181,14 +182,14 @@ impl Compiler {
         }
         v
     }
-    fn command_block(&mut self) {
+    fn command_block(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::OpenBraces);
         self.tokens.consume();
         self.commands();
         ensure_is_token!(self.tokens.next(), Token::CloseBraces);
         self.tokens.consume();
     }
-    fn declaration(&mut self) -> Vec<(VarType, String, i32)> {
+    fn declaration(&mut self) -> Result<Vec<(VarType, String, i32)>, CompileError> {
         let mut v = Vec::with_capacity(8);
         let var_type = self.vartype();
         ensure_is_token!(self.tokens.next(), Token::Identifier(_));
@@ -239,7 +240,7 @@ impl Compiler {
         self.tokens.consume();
         v
     }
-    fn attribuition(&mut self) {
+    fn attribuition(&mut self) -> Result<(), CompileError> {
         let is_indirect_assignment = if is_token!(self.tokens.next(), Token::Asterisc) {
             self.tokens.consume();
             true
@@ -319,7 +320,7 @@ impl Compiler {
             }
         }
     }
-    fn expression(&mut self) {
+    fn expression(&mut self) -> Result<(), CompileError> {
         self.logic_expr();
         while is_token!(self.tokens.next(), Token::Or) {
             self.tokens.consume();
@@ -327,7 +328,7 @@ impl Compiler {
             self.generated_code.insert((None, Instruction::DISJ));
         }
     }
-    fn logic_expr(&mut self) {
+    fn logic_expr(&mut self) -> Result<(), CompileError> {
         self.relational_expr();
         while is_token!(self.tokens.next(), Token::And) {
             self.tokens.consume();
@@ -335,7 +336,7 @@ impl Compiler {
             self.generated_code.insert((None, Instruction::CONJ));
         }
     }
-    fn relational_expr(&mut self) {
+    fn relational_expr(&mut self) -> Result<(), CompileError> {
         self.sum();
         if is_token!(self.tokens.next(), Token::LesserThan)
             || is_token!(self.tokens.next(), Token::GraterThan)
@@ -360,7 +361,7 @@ impl Compiler {
             ));
         }
     }
-    fn sum(&mut self) {
+    fn sum(&mut self) -> Result<(), CompileError> {
         self.factor();
         while is_token!(self.tokens.next(), Token::Plus)
             || is_token!(self.tokens.next(), Token::Minus)
@@ -377,7 +378,7 @@ impl Compiler {
             ));
         }
     }
-    fn factor(&mut self) {
+    fn factor(&mut self) -> Result<(), CompileError> {
         self.operand();
         while is_token!(self.tokens.next(), Token::Asterisc)
             || is_token!(self.tokens.next(), Token::Division)
@@ -394,7 +395,7 @@ impl Compiler {
             ));
         }
     }
-    fn command(&mut self) {
+    fn command(&mut self) -> Result<(), CompileError> {
         if is_token!(self.tokens.next(), Token::OpenBraces) {
             self.command_block();
         } else if is_token!(self.tokens.next(), Token::Identifier(_)) || is_token!(self.tokens.next(), Token::Asterisc) {
@@ -418,7 +419,7 @@ impl Compiler {
             self.tokens.consume();
         }
     }
-    fn if_command(&mut self) {
+    fn if_command(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::If);
         self.tokens.consume();
         let label_if = Label::new(self.simbols.new_label());
@@ -446,7 +447,7 @@ impl Compiler {
                 .insert((Some(label_if), Instruction::NADA));
         }
     }
-    fn while_command(&mut self) {
+    fn while_command(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::While);
         self.tokens.consume();
         let label_init = Label::new(self.simbols.new_label());
@@ -466,7 +467,7 @@ impl Compiler {
         self.generated_code
             .insert((Some(label_end), Instruction::NADA));
     }
-    fn read_command(&mut self) {
+    fn read_command(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::Read);
         self.tokens.consume();
         ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
@@ -518,7 +519,7 @@ impl Compiler {
         ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
         self.tokens.consume();
     }
-    fn print_command(&mut self) {
+    fn print_command(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::Print);
         self.tokens.consume();
         ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
@@ -530,7 +531,7 @@ impl Compiler {
         ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
         self.tokens.consume();
     }
-    fn function_call(&mut self) {
+    fn function_call(&mut self) -> Result<(), CompileError> {
         ensure_is_token!(self.tokens.next(), Token::Identifier(_));
         if let Token::Identifier(s) = self.tokens.consume() {
             let label = Label::new(self.simbols.get_fn_label(&s).unwrap());
@@ -545,7 +546,7 @@ impl Compiler {
         }
     }
     //retorna quantos foram carregados
-    fn argument_list(&mut self) -> usize {
+    fn argument_list(&mut self) -> Result<usize, CompileError> {
         let mut count = 0;
         if !is_token!(self.tokens.next(), Token::CloseBraces) {
             self.expression();
@@ -558,11 +559,11 @@ impl Compiler {
         }
         count
     }
-    fn operand(&mut self) {
+    fn operand(&mut self) -> Result<(), CompileError>{
         if is_token!(self.tokens.next(), Token::Identifier(_)) {
             //function call
             if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis) {
-                self.function_call();
+                return self.function_call();
             } else {
                 //identifier
                 if let Token::Identifier(s) = self.tokens.consume() {
@@ -716,62 +717,14 @@ impl Compiler {
                 }
             }
         }
+        Ok(())
     }
 }
 
 pub fn compile(origin: &PathBuf, target: &PathBuf) -> io::Result<()> {
     let mut c = Compiler::new(origin);
     c.program();
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Create or open the file
-    let file = File::create(&target)?;
-
-    // Write each string to the file, separated by newlines
-    let matrix: Vec<Vec<String>> = c
-        .generated_code
-        .0
-        .into_iter()
-        .map(|line| {
-            let mut v = Vec::with_capacity(5);
-            v.push(if let Some(label) = line.0 {
-                format!("{}", label)
-            } else {
-                "   ".to_string()
-            });
-            v.append(&mut line.1.to_string_vec());
-            v
-        })
-        .collect();
-
     println!("Compilado com sucesso!");
-    write_matrix(&matrix, file)
-}
-
-fn write_matrix(matrix: &Vec<Vec<String>>, file: File) -> io::Result<()> {
-    // Calculate the maximum width for each column
-    let mut max_widths: Vec<usize> = Vec::with_capacity(matrix[0].len());
-
-    for row in matrix {
-        for (i, item) in row.iter().enumerate() {
-            let item_len = format!("{}", item).len();
-            if max_widths.get(i).is_some() {
-                max_widths[i] = max_widths[i].max(item_len);
-            } else {
-                max_widths.push(item_len);
-            }
-        }
-    }
-
-    // Write the matrix with proper alignment
-    for row in matrix {
-        for (i, item) in row.iter().enumerate() {
-            let width = max_widths.get(i).unwrap_or(&0);
-            write!(&file, "{:width$} ", item, width = width)?;
-        }
-        writeln!(&file)?;
-    }
-    Ok(())
+    
+    c.generated_code.to_file(target)    
 }

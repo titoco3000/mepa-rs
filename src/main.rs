@@ -1,6 +1,5 @@
 #[allow(unused_imports)]
-use mepa_rs::compiler::compile;
-use mepa_rs::machine;
+use mepa_rs::{compiler::compile, machine};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -9,7 +8,7 @@ const DEBUG: bool = false;
 
 fn main() {
     if DEBUG {
-        //compile(PathBuf::from("samples/ipt/"))
+        //algo aqui que queira debugar
     } else {
         let matches = Command::new("My Program")
             .about("A compiler and MEPA execution tool")

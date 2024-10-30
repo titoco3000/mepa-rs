@@ -1,10 +1,9 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{self, BufRead};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::usize;
-use super::instruction::Instruction;
-use super::label::Label;
-
+use super::{label::Label, instruction::Instruction};
+use crate::utils::write_matrix;
 pub struct MepaCode(pub Vec<(Option<Label>, Instruction)>);
 
 impl MepaCode {
@@ -48,5 +47,51 @@ impl MepaCode {
         }
 
         Ok(mc)
+    }
+
+    pub fn remove_instruction(&mut self, index:usize){
+        self.0.remove(index);
+        
+        // atualiza todas as instruções que dependem de endereço
+        for (_, instruction) in &mut self.0{
+            match instruction {
+                Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label)=>{
+                    if let Label::Literal(n) = label{
+                        if *n > index {
+                            *label = Label::Literal(*n-1);
+                        }
+                    }
+                },
+                _=>{}
+            }
+        }
+    }
+
+    pub fn to_file(self, filename: &PathBuf) -> io::Result<()>
+    {
+        if let Some(parent) = filename.parent() {
+            fs::create_dir_all(parent)?;
+        }
+    
+        // Create or open the file
+        let file = File::create(filename)?;
+    
+        // Write each string to the file, separated by newlines
+        let matrix: Vec<Vec<String>> = self
+            .0
+            .into_iter()
+            .map(|line| {
+                let mut v = Vec::with_capacity(5);
+                v.push(if let Some(label) = line.0 {
+                    format!("{}", label)
+                } else {
+                    "   ".to_string()
+                });
+                v.append(&mut line.1.to_string_vec());
+                v
+            })
+            .collect();
+    
+        write_matrix(&matrix, file)
     }
 }
