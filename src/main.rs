@@ -1,4 +1,3 @@
-#[allow(unused_imports)]
 use mepa_rs::{compiler::{compile, CompileError}, machine};
 
 use clap::{Arg, Command};

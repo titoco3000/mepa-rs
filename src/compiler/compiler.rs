@@ -4,9 +4,9 @@ use std::path::PathBuf;
 use crate::mepa::label::Label;
 use crate::{ensure_is_token, is_token, mepa::instruction::Instruction};
 
+use super::error::CompileError;
 use super::lexic::{Lexic, Token};
 use super::simbol_table::{SimbolTable, VarType, Variable};
-use super::error::CompileError;
 use crate::mepa::code::MepaCode;
 
 struct Compiler {
@@ -37,7 +37,9 @@ impl Compiler {
             self.generated_code.insert((None, Instruction::AMEM(1)));
             self.generated_code.insert((
                 None,
-                Instruction::CHPR(Label::new(self.simbols.get_fn_label("main").ok_or_else(|| CompileError::Semantic(format!("Função 'main' não encontrada")))?)),
+                Instruction::CHPR(Label::new(self.simbols.get_fn_label("main").ok_or_else(
+                    || CompileError::Semantic(format!("Função 'main' não encontrada")),
+                )?)),
             ));
             //libera as variaveis globais + vars reservada para offset + variavel de retorno da main
             self.generated_code
@@ -45,12 +47,18 @@ impl Compiler {
             self.generated_code.insert((None, Instruction::PARA));
             Ok(())
         } else {
-            Err(CompileError::Sintatic("Extra tokens depois do final do programa".to_owned()))
+            Err(CompileError::Sintatic(
+                "Tokens extras depois do final do programa".to_owned(),
+            ))
         }
     }
 
-    fn function_def(&mut self) -> Result<(), CompileError>{
-        ensure_is_token!(self.tokens.next(), Token::Function);
+    fn function_def(&mut self) -> Result<(), CompileError> {
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::Function,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         if let Token::Identifier(id) = self.tokens.consume()? {
             self.current_function = Some(id.clone());
@@ -60,36 +68,57 @@ impl Compiler {
                 .insert((None, Instruction::DSVS(label_end.clone())));
             self.generated_code
                 .insert((Some(label_init), Instruction::ENPR(1)));
-            ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::OpenParenthesis,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
             let parameters = self.parameter_list()?;
             let l = parameters.len() as i32;
             for (i, (_, name)) in parameters.into_iter().enumerate() {
                 self.simbols
-                    .new_variable(
-                        Some(id.clone()),
-                        Variable::new(name, i as i32 - (2 + l)),
-                    )?;
+                    .new_variable(Some(id.clone()), Variable::new(name, i as i32 - (2 + l)))?;
             }
-            ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::CloseParenthesis,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
-            ensure_is_token!(self.tokens.next(), Token::OpenBraces);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::OpenBraces,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
 
             let local_vars = self.declarations()?;
 
             self.commands()?;
 
-            ensure_is_token!(self.tokens.next(), Token::Return);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::Return,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
             self.expression()?;
             //store at reserved position
             self.generated_code
                 .insert((None, Instruction::ARMZ(1, -(3 + l))));
 
-            ensure_is_token!(self.tokens.next(), Token::SemiColon);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::SemiColon,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
-            ensure_is_token!(self.tokens.next(), Token::CloseBraces);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::CloseBraces,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
             self.current_function = None;
 
@@ -117,22 +146,39 @@ impl Compiler {
             .insert((None, Instruction::AMEM(l as i32 + 2)));
         let mut acumulator = 2;
         for (var_type, name, size) in v.into_iter() {
-            self.simbols
-                .new_variable(
-                    self.current_function.clone(),
-                    Variable::new(name, acumulator),
-                )?;
-            if let VarType::Array = var_type{
-                self.generated_code
-                    .insert((None, Instruction::CREN(if self.current_function.is_none(){0}else{1}, acumulator + 1)));
-                self.generated_code
-                    .insert((None, Instruction::ARMZ(if self.current_function.is_none(){0}else{1}, acumulator)));
+            self.simbols.new_variable(
+                self.current_function.clone(),
+                Variable::new(name, acumulator),
+            )?;
+            if let VarType::Array = var_type {
+                self.generated_code.insert((
+                    None,
+                    Instruction::CREN(
+                        if self.current_function.is_none() {
+                            0
+                        } else {
+                            1
+                        },
+                        acumulator + 1,
+                    ),
+                ));
+                self.generated_code.insert((
+                    None,
+                    Instruction::ARMZ(
+                        if self.current_function.is_none() {
+                            0
+                        } else {
+                            1
+                        },
+                        acumulator,
+                    ),
+                ));
             }
             acumulator += size;
         }
         Ok(l)
     }
-    fn commands(&mut self) -> Result<(), CompileError>{
+    fn commands(&mut self) -> Result<(), CompileError> {
         while is_token!(self.tokens.next(), Token::OpenBraces)
             || is_token!(self.tokens.next(), Token::Identifier(_))
             || is_token!(self.tokens.next(), Token::Asterisc)
@@ -149,7 +195,11 @@ impl Compiler {
         match self.tokens.consume()? {
             Token::Int => Ok(VarType::Int),
             Token::Ptr => Ok(VarType::Ptr),
-            token => Err(CompileError::Sintatic(format!("Esperava um tipo, obteve {:?}",token))), //Deveria ser {} aqui! Consertar depois
+            token => Err(CompileError::Sintatic(format!(
+                "Esperava um tipo, obteve {:?} na linha {}",
+                token,
+                self.tokens.current_line()
+            ))), //Deveria ser {} aqui! Consertar depois
         }
     }
     fn parameter_list(&mut self) -> Result<Vec<(VarType, String)>, CompileError> {
@@ -160,7 +210,11 @@ impl Compiler {
                 Token::Ptr => VarType::Ptr,
                 _ => panic!(),
             };
-            ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::Identifier(_),
+                self.tokens.current_line()
+            );
             if let Token::Identifier(s) = self.tokens.consume()? {
                 v.push((var_type, s));
             }
@@ -174,7 +228,11 @@ impl Compiler {
                 } else {
                     panic!("expected type");
                 }
-                ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::Identifier(_),
+                    self.tokens.current_line()
+                );
                 if let Token::Identifier(s) = self.tokens.consume()? {
                     v.push((var_type, s));
                 }
@@ -183,49 +241,77 @@ impl Compiler {
         Ok(v)
     }
     fn command_block(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::OpenBraces);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::OpenBraces,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         self.commands()?;
-        ensure_is_token!(self.tokens.next(), Token::CloseBraces);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::CloseBraces,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         Ok(())
     }
     fn declaration(&mut self) -> Result<Vec<(VarType, String, i32)>, CompileError> {
         let mut v = Vec::with_capacity(8);
         let var_type = self.vartype()?;
-        ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::Identifier(_),
+            self.tokens.current_line()
+        );
         if let Token::Identifier(s) = self.tokens.consume()? {
             let (size, is_array) = if is_token!(self.tokens.next(), Token::OpenBrackets) {
                 self.tokens.consume()?;
-                ensure_is_token!(self.tokens.next(), Token::Number(_));
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::Number(_),
+                    self.tokens.current_line()
+                );
                 if let Token::Number(n) = self.tokens.consume()? {
-                    ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                    ensure_is_token!(
+                        self.tokens.next(),
+                        Token::CloseBrackets,
+                        self.tokens.current_line()
+                    );
                     self.tokens.consume()?;
                     (n + 1, true)
                 } else {
                     panic!() //impossivel de chegar aqui
                 }
             } else {
-                (1,false)
+                (1, false)
             };
-            v.push((
-                if is_array{VarType::Array}else{ var_type},
-                s,
-                size,
-            ));
+            v.push((if is_array { VarType::Array } else { var_type }, s, size));
         }
         while is_token!(self.tokens.next(), Token::Comma) {
             self.tokens.consume()?;
-            ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::Identifier(_),
+                self.tokens.current_line()
+            );
             if let Token::Identifier(s) = self.tokens.consume()? {
                 v.push((
                     var_type,
                     s,
                     if is_token!(self.tokens.next(), Token::OpenBrackets) {
                         self.tokens.consume()?;
-                        ensure_is_token!(self.tokens.next(), Token::Number(_));
+                        ensure_is_token!(
+                            self.tokens.next(),
+                            Token::Number(_),
+                            self.tokens.current_line()
+                        );
                         if let Token::Number(n) = self.tokens.consume()? {
-                            ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                            ensure_is_token!(
+                                self.tokens.next(),
+                                Token::CloseBrackets,
+                                self.tokens.current_line()
+                            );
                             self.tokens.consume()?;
                             n
                         } else {
@@ -237,7 +323,11 @@ impl Compiler {
                 ));
             }
         }
-        ensure_is_token!(self.tokens.next(), Token::SemiColon);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::SemiColon,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         Ok(v)
     }
@@ -249,18 +339,26 @@ impl Compiler {
             false
         };
 
-        ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::Identifier(_),
+            self.tokens.current_line()
+        );
         if let Token::Identifier(s) = self.tokens.consume()? {
             let (m, n) = self
                 .simbols
                 .get_var_addr_and_type(&s, self.current_function.clone())
-                .ok_or_else(|| CompileError::Semantic(format!("Variavel `{}` não encontrada", s)))?;
+                .ok_or_else(|| {
+                    CompileError::Semantic(format!(
+                        "Variavel `{}` não foi declarada neste escopo, na linha {}",
+                        s,
+                        self.tokens.current_line()
+                    ))
+                })?;
             if is_token!(self.tokens.next(), Token::OpenBrackets) {
                 self.tokens.consume()?;
 
-                self.generated_code.insert((
-                    None,Instruction::CRVL(m, n)
-                ));
+                self.generated_code.insert((None, Instruction::CRVL(m, n)));
                 self.expression()?;
                 self.generated_code.insert((None, Instruction::SOMA));
                 self.generated_code.insert((
@@ -275,14 +373,18 @@ impl Compiler {
                     ),
                 ));
 
-                if is_indirect_assignment{
-                    self.generated_code.insert((None, Instruction::CRVI(if self.current_function.is_none() {
-                            0
-                        } else {
-                            1
-                        },
-                        1, //guarda endereço na pos reservada para lvalue
-                    ),));
+                if is_indirect_assignment {
+                    self.generated_code.insert((
+                        None,
+                        Instruction::CRVI(
+                            if self.current_function.is_none() {
+                                0
+                            } else {
+                                1
+                            },
+                            1, //guarda endereço na pos reservada para lvalue
+                        ),
+                    ));
                     self.generated_code.insert((
                         None,
                         Instruction::ARMZ(
@@ -296,9 +398,17 @@ impl Compiler {
                     ));
                 }
 
-                ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::CloseBrackets,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
-                ensure_is_token!(self.tokens.next(), Token::Assign);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::Assign,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
                 self.expression()?;
 
@@ -314,10 +424,21 @@ impl Compiler {
                     ),
                 ));
             } else {
-                ensure_is_token!(self.tokens.next(), Token::Assign);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::Assign,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
                 self.expression()?;
-                self.generated_code.insert((None, if is_indirect_assignment{Instruction::ARMI(m, n)}else{Instruction::ARMZ(m, n)}));
+                self.generated_code.insert((
+                    None,
+                    if is_indirect_assignment {
+                        Instruction::ARMI(m, n)
+                    } else {
+                        Instruction::ARMZ(m, n)
+                    },
+                ));
             }
         }
         Ok(())
@@ -405,9 +526,15 @@ impl Compiler {
     fn command(&mut self) -> Result<(), CompileError> {
         if is_token!(self.tokens.next(), Token::OpenBraces) {
             self.command_block()?;
-        } else if is_token!(self.tokens.next(), Token::Identifier(_)) || is_token!(self.tokens.next(), Token::Asterisc) {
+        } else if is_token!(self.tokens.next(), Token::Identifier(_))
+            || is_token!(self.tokens.next(), Token::Asterisc)
+        {
             self.attribuition()?;
-            ensure_is_token!(self.tokens.next(), Token::SemiColon);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::SemiColon,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::If) {
             self.if_command()?;
@@ -415,27 +542,47 @@ impl Compiler {
             self.while_command()?;
         } else if is_token!(self.tokens.next(), Token::Print) {
             self.print_command()?;
-            ensure_is_token!(self.tokens.next(), Token::SemiColon);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::SemiColon,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::Read) {
             self.read_command()?;
-            ensure_is_token!(self.tokens.next(), Token::SemiColon);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::SemiColon,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
         } else {
-            ensure_is_token!(self.tokens.next(), Token::SemiColon);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::SemiColon,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
         }
         Ok(())
     }
     fn if_command(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::If);
+        ensure_is_token!(self.tokens.next(), Token::If, self.tokens.current_line());
         self.tokens.consume()?;
         let label_if = Label::new(self.simbols.new_label());
 
-        ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::OpenParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         self.expression()?;
-        ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::CloseParenthesis,
+            self.tokens.current_line()
+        );
         self.generated_code
             .insert((None, Instruction::DSVF(label_if.clone())));
         self.tokens.consume()?;
@@ -457,18 +604,26 @@ impl Compiler {
         Ok(())
     }
     fn while_command(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::While);
+        ensure_is_token!(self.tokens.next(), Token::While, self.tokens.current_line());
         self.tokens.consume()?;
         let label_init = Label::new(self.simbols.new_label());
         let label_end = Label::new(self.simbols.new_label());
         self.generated_code
             .insert((Some(label_init.clone()), Instruction::NADA));
-        ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::OpenParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         self.expression()?;
         self.generated_code
             .insert((None, Instruction::DSVF(label_end.clone())));
-        ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::CloseParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         self.command()?;
         self.generated_code
@@ -478,16 +633,30 @@ impl Compiler {
         Ok(())
     }
     fn read_command(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::Read);
+        ensure_is_token!(self.tokens.next(), Token::Read, self.tokens.current_line());
         self.tokens.consume()?;
-        ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::OpenParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
-        ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::Identifier(_),
+            self.tokens.current_line()
+        );
         if let Token::Identifier(s) = self.tokens.consume()? {
             let (m, n) = self
                 .simbols
                 .get_var_addr_and_type(&s, self.current_function.clone())
-                .ok_or_else(|| CompileError::Semantic(format!("Variavel `{}` não encontrada", s)))?;
+                .ok_or_else(|| {
+                    CompileError::Semantic(format!(
+                        "Variavel `{}` não foi declarada neste escopo, na linha {}",
+                        s,
+                        self.tokens.current_line()
+                    ))
+                })?;
             if is_token!(self.tokens.next(), Token::OpenBrackets) {
                 self.tokens.consume()?;
                 self.generated_code.insert((None, Instruction::CREN(m, n)));
@@ -519,47 +688,78 @@ impl Compiler {
                     ),
                 ));
 
-                ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::CloseBrackets,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
             } else {
                 self.generated_code.insert((None, Instruction::LEIT));
                 self.generated_code.insert((None, Instruction::ARMZ(m, n)));
             }
         }
-        ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::CloseParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         Ok(())
     }
 
     fn print_command(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::Print);
+        ensure_is_token!(self.tokens.next(), Token::Print, self.tokens.current_line());
         self.tokens.consume()?;
-        ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::OpenParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         let args = self.argument_list()?;
         for _ in 0..args {
             self.generated_code.insert((None, Instruction::IMPR));
         }
-        ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::CloseParenthesis,
+            self.tokens.current_line()
+        );
         self.tokens.consume()?;
         Ok(())
     }
     fn function_call(&mut self) -> Result<(), CompileError> {
-        ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+        ensure_is_token!(
+            self.tokens.next(),
+            Token::Identifier(_),
+            self.tokens.current_line()
+        );
         if let Token::Identifier(s) = self.tokens.consume()? {
-            if let Some(fn_loc) = self.simbols.get_fn_label(&s){
+            if let Some(fn_loc) = self.simbols.get_fn_label(&s) {
                 let label = Label::new(fn_loc);
-                ensure_is_token!(self.tokens.next(), Token::OpenParenthesis);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::OpenParenthesis,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
                 //reserve a position for return value
                 self.generated_code.insert((None, Instruction::AMEM(1)));
                 self.argument_list()?;
-                ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::CloseParenthesis,
+                    self.tokens.current_line()
+                );
                 self.tokens.consume()?;
                 self.generated_code.insert((None, Instruction::CHPR(label)));
-            }
-            else {
-                return Err(CompileError::Semantic("Função \"{}\" não encontrada".to_owned()));
+            } else {
+                return Err(CompileError::Semantic(format!(
+                    "Função \"{}\" não foi declarada, na linha {}",
+                    s,
+                    self.tokens.current_line()
+                )));
             }
         }
         Ok(())
@@ -578,7 +778,7 @@ impl Compiler {
         }
         Ok(count)
     }
-    fn operand(&mut self) -> Result<(), CompileError>{
+    fn operand(&mut self) -> Result<(), CompileError> {
         if is_token!(self.tokens.next(), Token::Identifier(_)) {
             //function call
             if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis) {
@@ -587,14 +787,18 @@ impl Compiler {
                 //identifier
                 if let Token::Identifier(s) = self.tokens.consume()? {
                     let (m, n) = self
-                .simbols
-                .get_var_addr_and_type(&s, self.current_function.clone())
-                .ok_or_else(|| CompileError::Semantic(format!("Variavel `{}` não encontrada", s)))?;
+                        .simbols
+                        .get_var_addr_and_type(&s, self.current_function.clone())
+                        .ok_or_else(|| {
+                            CompileError::Semantic(format!(
+                                "Variavel `{}` não foi declarada neste escopo, na linha {}",
+                                s,
+                                self.tokens.current_line()
+                            ))
+                        })?;
                     if is_token!(self.tokens.next(), Token::OpenBrackets) {
                         self.tokens.consume()?;
-                        self.generated_code.insert((
-                            None,Instruction::CRVL(m, n)
-                        ));
+                        self.generated_code.insert((None, Instruction::CRVL(m, n)));
                         self.expression()?;
                         self.generated_code.insert((None, Instruction::SOMA));
                         self.generated_code.insert((
@@ -621,7 +825,11 @@ impl Compiler {
                             ),
                         ));
 
-                        ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                        ensure_is_token!(
+                            self.tokens.next(),
+                            Token::CloseBrackets,
+                            self.tokens.current_line()
+                        );
                         self.tokens.consume()?;
                     } else {
                         self.generated_code.insert((None, Instruction::CRVL(m, n)));
@@ -635,7 +843,11 @@ impl Compiler {
         } else if is_token!(self.tokens.next(), Token::OpenParenthesis) {
             self.tokens.consume()?;
             self.expression()?;
-            ensure_is_token!(self.tokens.next(), Token::CloseParenthesis);
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::CloseParenthesis,
+                self.tokens.current_line()
+            );
             self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::Minus) {
             self.tokens.consume()?;
@@ -647,21 +859,33 @@ impl Compiler {
             self.operand()?;
         } else if is_token!(self.tokens.next(), Token::AddressOf) {
             self.tokens.consume()?;
-            ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::Identifier(_),
+                self.tokens.current_line()
+            );
             if let Token::Identifier(s) = self.tokens.consume()? {
                 let (m, n) = self
-                .simbols
-                .get_var_addr_and_type(&s, self.current_function.clone())
-                .ok_or_else(|| CompileError::Semantic(format!("Variavel `{}` não encontrada", s)))?;
+                    .simbols
+                    .get_var_addr_and_type(&s, self.current_function.clone())
+                    .ok_or_else(|| {
+                        CompileError::Semantic(format!(
+                            "Variavel `{}` não foi declarada neste escopo, na linha {}",
+                            s,
+                            self.tokens.current_line()
+                        ))
+                    })?;
                 if is_token!(self.tokens.next(), Token::OpenBrackets) {
                     self.tokens.consume()?;
-                    self.generated_code.insert((
-                        None,Instruction::CRVL(m, n)
-                    ));
+                    self.generated_code.insert((None, Instruction::CRVL(m, n)));
                     self.expression()?;
                     self.generated_code.insert((None, Instruction::SOMA));
 
-                    ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                    ensure_is_token!(
+                        self.tokens.next(),
+                        Token::CloseBrackets,
+                        self.tokens.current_line()
+                    );
                     self.tokens.consume()?;
                 } else {
                     self.generated_code.insert((None, Instruction::CREN(m, n)));
@@ -669,18 +893,25 @@ impl Compiler {
             }
         } else if is_token!(self.tokens.next(), Token::Asterisc) {
             self.tokens.consume()?;
-            ensure_is_token!(self.tokens.next(), Token::Identifier(_));
+            ensure_is_token!(
+                self.tokens.next(),
+                Token::Identifier(_),
+                self.tokens.current_line()
+            );
             if let Token::Identifier(s) = self.tokens.consume()? {
                 let (m, n) = self
-                .simbols
-                .get_var_addr_and_type(&s, self.current_function.clone())
-                .ok_or_else(|| CompileError::Semantic(format!("Variavel `{}` não encontrada", s)))?;
+                    .simbols
+                    .get_var_addr_and_type(&s, self.current_function.clone())
+                    .ok_or_else(|| {
+                        CompileError::Semantic(format!(
+                            "Variavel `{}` não foi declarada neste escopo, na linha {}",
+                            s,
+                            self.tokens.current_line()
+                        ))
+                    })?;
                 if is_token!(self.tokens.next(), Token::OpenBrackets) {
                     self.tokens.consume()?;
-                    self.generated_code.insert((
-                        None,
-                        Instruction::CRVL(m, n)
-                    ));
+                    self.generated_code.insert((None, Instruction::CRVL(m, n)));
                     self.expression()?;
                     self.generated_code.insert((None, Instruction::SOMA));
                     self.generated_code.insert((
@@ -729,7 +960,11 @@ impl Compiler {
                         ),
                     ));
 
-                    ensure_is_token!(self.tokens.next(), Token::CloseBrackets);
+                    ensure_is_token!(
+                        self.tokens.next(),
+                        Token::CloseBrackets,
+                        self.tokens.current_line()
+                    );
                     self.tokens.consume()?;
                 } else {
                     self.generated_code.insert((None, Instruction::CRVI(m, n)));
@@ -743,6 +978,6 @@ impl Compiler {
 pub fn compile(origin: &PathBuf, target: &PathBuf) -> Result<io::Result<()>, CompileError> {
     let mut c = Compiler::new(origin)?;
     c.program()?;
-    println!("Compilado com sucesso!");    
-    Ok(c.generated_code.to_file(target))    
+    println!("Compilado com sucesso!");
+    Ok(c.generated_code.to_file(target))
 }

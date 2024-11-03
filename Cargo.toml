@@ -2,6 +2,12 @@
 name = "mepa-rs"
 version = "0.1.0"
 edition = "2021"
+authors = ["Tito Guidotti <tito.guidotti@gmail.com>"]
+repository = "https://github.com/titoco3000/mepa-rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 clap = { version = "4.5.20", features = ["derive"] }
+wasm-bindgen = "0.2.95"
