@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
+use super::error::CompileError;
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -52,7 +53,8 @@ macro_rules! ensure_is_token {
     ($option:expr, $expected:pat_param) => {
         match $option {
             Some($expected) => {},
-            _ => return Err(CompileError::ExpectedToken(stringify!($expected))),
+            Some(actual) => return Err(CompileError::Sintatic(format!("Esperava '{}', obteve 'Token:{:?}'", stringify!($expected), actual))),
+            None => return Err(CompileError::Sintatic(format!("Esperava '{}', mas não encontrou nenhum token", stringify!($expected)))),
         }
     };
 }
@@ -63,19 +65,19 @@ pub struct Reader {
 }
 
 impl Reader {
-    pub fn new(file_path: &PathBuf) -> Reader {
+    pub fn new(file_path: &PathBuf) -> Result<Reader, CompileError> {
         let file = File::open(file_path).expect("unable to open file");
         let mut reader = BufReader::new(file);
         let mut single_char = [0; 1]; // Buffer for reading one byte at a time
-        Reader {
+        Ok(Reader {
             next_char: {
-                if reader.read(&mut single_char).unwrap() == 0 {
+                if reader.read(&mut single_char).map_err(|e|CompileError::Lexic(format!("{}",e)))? == 0 {
                     panic!("Error on first character");
                 }
                 char::from_u32(single_char[0] as u32)
             },
             reader,
-        }
+        })
     }
 
     fn consume_char(&mut self) {
@@ -91,7 +93,7 @@ impl Reader {
         };
     }
 
-    pub fn get_next_token(&mut self) -> Result<Option<Token>, &str> {
+    pub fn get_next_token(&mut self) -> Result<Option<Token>, CompileError> {
         //skip whitespaces
         loop{
             if let Some(c) = self.next_char {
@@ -139,7 +141,7 @@ impl Reader {
                                         }
                                     }
                                 } else {
-                                    return Err("Unfinished multi-line comment");
+                                    return Err(CompileError::Lexic("Comentário multi-linhas inacabado".to_owned()));
                                 }
                             }
                             self.get_next_token()
@@ -171,7 +173,7 @@ impl Reader {
                             self.consume_char();
                             Ok(Some(Token::Or))
                         } else {
-                            Err("Expected '|'")
+                            Err(CompileError::Lexic(format!("Esperava '|', obteve '{}'",c)))
                         }
                     }
                     //or
@@ -233,8 +235,7 @@ impl Reader {
                                 Ok(Some(Token::Identifier(s)))
                             }
                         } else {
-                            println!("Unexpected char: '{}'", c);
-                            Err("Unexpected char")
+                            Err(CompileError::Lexic(format!("Char inesperado: '{}'",c)))
                         }
                     }
                 }
@@ -249,18 +250,18 @@ impl Reader {
 pub struct Lexic(Vec<Token>);
 
 impl Lexic {
-    pub fn new(file_path: &PathBuf) -> Lexic {
+    pub fn new(file_path: &PathBuf) -> Result<Lexic, CompileError> {
         let mut list = Vec::with_capacity(128);
 
-        let mut l = Reader::new(file_path);
+        let mut l = Reader::new(file_path)?;
 
-        while let Some(token) = l.get_next_token().unwrap() {
+        while let Some(token) = l.get_next_token()? {
             list.push(token);
         }
 
         list = list.into_iter().rev().collect();
 
-        Lexic(list)
+        Ok(Lexic(list))
     }
 
     pub fn next(&self) -> Option<&Token> {
@@ -269,7 +270,10 @@ impl Lexic {
     pub fn next_to_next(&self) -> Option<&Token> {
         self.0.get(self.0.len() - 2)
     }
-    pub fn consume(&mut self) -> Token {
-        self.0.pop().unwrap()
+    pub fn consume(&mut self) -> Result<Token, CompileError> {
+        match self.0.pop(){
+            Some(p)=>Ok(p),
+            None=>Err(CompileError::Sintatic(format!("Fim de arquivo inesperado")))
+        }
     }
 }

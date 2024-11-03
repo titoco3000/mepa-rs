@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use mepa_rs::{compiler::compile, machine};
+use mepa_rs::{compiler::{compile, CompileError}, machine};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -15,8 +15,8 @@ fn main() {
             .arg(
                 Arg::new("action")
                     .required(true)
-                    .value_parser(["compile", "run", "test"])
-                    .help("Action to perform (compile, run, or test)"),
+                    .value_parser(["compile", "run", "debug"])
+                    .help("Action to perform (compile, run, or debug)"),
             )
             .arg(
                 Arg::new("input")
@@ -35,8 +35,8 @@ fn main() {
                     .help("Run the program after compilation"),
             )
             .arg(
-                Arg::new("test")
-                    .long("test")
+                Arg::new("debug")
+                    .long("debug")
                     .action(clap::ArgAction::SetTrue)
                     .help("Test the program interactively"),
             )
@@ -61,7 +61,7 @@ fn main() {
             .unwrap_or_else(Vec::new);
 
         let should_run = *matches.get_one::<bool>("run").unwrap_or(&false);
-        let should_test = *matches.get_one::<bool>("test").unwrap_or(&false);
+        let should_debug = *matches.get_one::<bool>("debug").unwrap_or(&false);
 
         // Handle directory or file input
         if input_path.is_dir() {
@@ -87,7 +87,7 @@ fn main() {
                         &file_path,
                         &p,
                         should_run,
-                        should_test,
+                        should_debug,
                         &input_values,
                     );
                 }
@@ -109,7 +109,7 @@ fn main() {
                 &input_path,
                 &p,
                 should_run,
-                should_test,
+                should_debug,
                 &input_values,
             );
         }
@@ -121,7 +121,7 @@ fn handle_action(
     input_path: &PathBuf,
     output_path: &PathBuf,
     should_run: bool,
-    should_test: bool,
+    should_debug: bool,
     input_values: &[i32],
 ) {
     match action {
@@ -134,17 +134,28 @@ fn handle_action(
                 output_path.clone()
             };
             println!("compilando {:?}", input_path.file_name().unwrap());
-            compile(input_path, &output).unwrap();
-            if should_test {
-                machine::interactive_execution(&output_path, input_values.to_vec());
-            } else if should_run {
-                machine::execute(&output_path, input_values.to_vec());
+            match compile(input_path, &output) {
+                Ok(r) => match r {
+                    Ok(_) => {
+                        if should_debug {
+                            machine::interactive_execution(&output_path, input_values.to_vec());
+                        } else if should_run {
+                            machine::execute(&output_path, input_values.to_vec());
+                        }
+                    }
+                    Err(e) => println!("Erro de IO: {:?}", e),
+                },
+                Err(e) => match e {
+                    CompileError::Lexic(s)=>println!("Erro léxico: {}",s),
+                    CompileError::Sintatic(s)=>println!("Erro sintático: {}",s),
+                    CompileError::Semantic(s)=>println!("Erro semântico: {}",s),
+                },
             }
         }
         "run" => {
             machine::execute(input_path, input_values.to_vec());
         }
-        "test" => {
+        "debug" => {
             machine::interactive_execution(input_path, input_values.to_vec());
         }
         _ => unreachable!(),

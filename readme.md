@@ -105,7 +105,7 @@ Se não for especificado -o, o objeto produzido para a linha acima ficará em `o
 
 #### Execução interativa
 ```
-$ cargo run -- test samples/mepa/recursao.mepa
+$ cargo run -- debug samples/mepa/recursao.mepa
 ```
 
 #### Execução imediata
@@ -118,11 +118,11 @@ $ cargo run -- run samples/mepa/recursao.mepa
 Além disso, é possível encadear execução com a compilação: 
 
 ```
-$ cargo run -- compile samples/ipt/sort.ipt [--run | --test]
+$ cargo run -- compile samples/ipt/sort.ipt [--run | --debug]
 ```
 
 #### Entrada
-No teste e execução, é possível especificar as entradas a serem feitas no programa:
+No debug e execução, é possível especificar as entradas a serem feitas no programa:
 
 ```
 $ cargo run -- run samples/mepa/recursao.mepa --input 1,2,3
@@ -138,4 +138,4 @@ Quando input não for especificado, `LEIT` vai pedir entrada pelo stdin.
 ```
 $ cargo run -- compile samples/ipt 
 ```
-Nesse modo, todas as opções passadas (-o, --test, etc) são aplicadas sequencialmente em cada arquivo.
+Nesse modo, todas as opções passadas (-o, --debug, etc) são aplicadas sequencialmente em cada arquivo.
