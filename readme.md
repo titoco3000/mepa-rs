@@ -103,6 +103,13 @@ $ cargo run -- compile samples/ipt/sort.ipt [-o output.o]
 
 Se não for especificado -o, o objeto produzido para a linha acima ficará em `output/sort.mepa`.
 
+#### Otimização
+```
+$ cargo run -- optimize samples/ipt/sort.ipt [-o output.o]
+```
+
+Se não for especificado -o, o objeto produzido para a linha acima ficará em `output/sort.opt.mepa`.
+
 #### Execução interativa
 ```
 $ cargo run -- debug samples/mepa/recursao.mepa

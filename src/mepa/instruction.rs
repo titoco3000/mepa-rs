@@ -1,7 +1,7 @@
 use super::label::Label;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Instruction {
     CRCT(i32),
     CRVL(i32, i32),

@@ -1,4 +1,4 @@
-use mepa_rs::{compiler::{compile, CompileError}, machine};
+use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizador::Otimizador};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -9,13 +9,13 @@ fn main() {
     if DEBUG {
         //algo aqui que queira debugar
     } else {
-        let matches = Command::new("My Program")
+        let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")
             .arg(
                 Arg::new("action")
                     .required(true)
-                    .value_parser(["compile", "run", "debug"])
-                    .help("Action to perform (compile, run, or debug)"),
+                    .value_parser(["compile", "run", "debug", "optimize"])
+                    .help("Action to perform (compile, run, debug or optimize)"),
             )
             .arg(
                 Arg::new("input")
@@ -26,6 +26,12 @@ fn main() {
                 Arg::new("output")
                     .short('o')
                     .help("Optional output file for the compilation"),
+            )
+            .arg(
+                Arg::new("optimize")
+                    .long("optimize")
+                    .action(clap::ArgAction::SetTrue)
+                    .help("Optimize the program after compilation"),
             )
             .arg(
                 Arg::new("run")
@@ -61,6 +67,7 @@ fn main() {
 
         let should_run = *matches.get_one::<bool>("run").unwrap_or(&false);
         let should_debug = *matches.get_one::<bool>("debug").unwrap_or(&false);
+        let should_optimize = *matches.get_one::<bool>("optimize").unwrap_or(&false);
 
         // Handle directory or file input
         if input_path.is_dir() {
@@ -80,13 +87,13 @@ fn main() {
                             p
                         }
                     };
-                    println!("Fazendo para {:?}", p);
                     handle_action(
                         action,
                         &file_path,
                         &p,
                         should_run,
                         should_debug,
+                        should_optimize,
                         &input_values,
                     );
                 }
@@ -109,6 +116,7 @@ fn main() {
                 &p,
                 should_run,
                 should_debug,
+                should_optimize,
                 &input_values,
             );
         }
@@ -121,6 +129,7 @@ fn handle_action(
     output_path: &PathBuf,
     should_run: bool,
     should_debug: bool,
+    should_optimize: bool,
     input_values: &[i32],
 ) {
     match action {
@@ -136,6 +145,9 @@ fn handle_action(
             match compile(input_path, &output) {
                 Ok(r) => match r {
                     Ok(_) => {
+                        if should_optimize{
+                            todo!()
+                        }
                         if should_debug {
                             machine::interactive_execution(&output_path, input_values.to_vec());
                         } else if should_run {
@@ -150,6 +162,9 @@ fn handle_action(
                     CompileError::Semantic(s)=>println!("Erro semântico: {}",s),
                 },
             }
+        }
+        "optimize" => {
+            Otimizador::from_file(input_path).unwrap();
         }
         "run" => {
             machine::execute(input_path, input_values.to_vec());
