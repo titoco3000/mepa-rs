@@ -7,9 +7,6 @@ use crate::mepa::{
 };
 
 pub fn remover_rotulos_simbolicos(mc: MepaCode)->MepaCode {
-    for instrucao in &mc.0{
-        println!("{:?}",instrucao.1);
-    }
     let mut labels = HashMap::new();
 
    // Localiza todas labels

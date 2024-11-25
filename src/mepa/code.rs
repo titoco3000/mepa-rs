@@ -1,7 +1,7 @@
 use std::fs::{self, File};
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use super::{label::Label, instruction::Instruction};
 use crate::utils::write_matrix;
 
@@ -13,6 +13,12 @@ impl Deref for MepaCode {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl DerefMut for MepaCode {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -60,7 +66,6 @@ impl MepaCode {
     }
 
     pub fn remove_instruction(&mut self, index:usize){
-        println!("Removendo {}",index);
         self.0.remove(index);
         
         // atualiza todas as instruções que dependem de endereço
@@ -68,8 +73,8 @@ impl MepaCode {
             match instruction {
                 Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label)=>{
                     if let Label::Literal(n) = label{
-                        if *n > index+1 {
-                            println!("Mudando {} para {}",*n, *n-1);
+                        if *n > index {
+                            // println!("Mudando {} para {}",*n, *n-1);
                             *label = Label::Literal(*n-1);
                         }
                     }

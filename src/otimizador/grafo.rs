@@ -44,8 +44,6 @@ pub fn map_code_to_graph(code: &MepaCode) -> Graph<(usize, usize), ()> {
 
     lideres.sort_unstable();
 
-    println!("lideres: {:?}", lideres);
-
     let vertices: Vec<NodeIndex> = lideres
         .iter()
         .zip(lideres.iter().skip(1).chain(std::iter::once(&code.len())))
@@ -106,10 +104,8 @@ pub fn map_code_to_graph(code: &MepaCode) -> Graph<(usize, usize), ()> {
                             })
                             .expect("Address not found in groupings")
                             .clone();
-						println!("Procurando retorno de {}",linha);
                         let return_block = code.iter().enumerate().skip(*jmp_addr).find_map(|(ret_addr, (_, inst))| {
                             if let Instruction::RTPR(_, _) = inst {
-                                println!("Achou em {}",ret_addr);
 								Some(
 									vertices
 										.iter()
@@ -132,7 +128,6 @@ pub fn map_code_to_graph(code: &MepaCode) -> Graph<(usize, usize), ()> {
                             })
                             .expect("Address not found in groupings")
                             .clone();
-						println!("Adcionando pulo de {:?} para {:?}",grafo.node_weight(return_block), grafo.node_weight(next_block));
 						arestas.push((*v, procedure_block));
                         arestas.push((return_block, next_block));
                     } else {
@@ -151,7 +146,6 @@ pub fn map_code_to_graph(code: &MepaCode) -> Graph<(usize, usize), ()> {
 						})
 						.expect("Address not found in groupings")
 						.clone();
-						println!("Na ultima linha de {:?}, vou para {:?}",linhas,grafo.node_weight(next_block));
 						arestas.push((*v, next_block));
 					}
 				}
@@ -179,7 +173,6 @@ pub fn graph_to_file(
 	for &(inicio, fim) in graph.node_weights() {
 		let linhas_de_mepa:Vec<String> = (inicio..fim).map(|linha|format!("{}: {}",linha, code[linha].1)).collect();
 		let s = linhas_de_mepa.join("\n");
-		println!("{}",s);
 		graph_with_code.add_node(s);
 	}
 

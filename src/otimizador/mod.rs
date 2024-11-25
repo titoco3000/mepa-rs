@@ -1,3 +1,5 @@
 mod pre_processamento;
 mod grafo;
-pub mod otimizador;
+mod otimizador;
+
+pub use otimizador::otimizar;

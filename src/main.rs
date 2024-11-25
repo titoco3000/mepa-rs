@@ -1,4 +1,4 @@
-use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizador::Otimizador};
+use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -164,7 +164,7 @@ fn handle_action(
             }
         }
         "optimize" => {
-            Otimizador::from_file(input_path).unwrap();
+            otimizar(input_path).unwrap();
         }
         "run" => {
             machine::execute(input_path, input_values.to_vec());
