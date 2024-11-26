@@ -1,6 +1,6 @@
 use std::fs::{self, File};
 use std::io::{self, BufRead};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::ops::{Deref, DerefMut};
 use super::{label::Label, instruction::Instruction};
 use crate::utils::write_matrix;
@@ -84,9 +84,11 @@ impl MepaCode {
         }
     }
 
-    pub fn to_file(self, filename: &PathBuf) -> io::Result<()>
+    pub fn to_file<P>(self, filename: P) -> io::Result<()>
+    where
+    P: AsRef<Path>,
     {
-        if let Some(parent) = filename.parent() {
+        if let Some(parent) = filename.as_ref().parent() {
             fs::create_dir_all(parent)?;
         }
     

@@ -7,11 +7,8 @@ use petgraph::Graph;
 use std::io;
 use std::path::{Path, PathBuf};
 
-pub fn otimizar<P>(filename: P) -> io::Result<()>
-where
-    P: AsRef<Path>,
-{
-    let mut code = remover_rotulos_simbolicos(MepaCode::from_file(filename)?);
+pub fn otimizar(code:MepaCode)->MepaCode{
+    let mut code = remover_rotulos_simbolicos(code);
     let mut grafo = map_code_to_graph(&code);
 
     let functions = [fluxo, elimidar_codigo_morto];
@@ -28,12 +25,19 @@ where
         if !mudou {
             break; 
         }
-    }
-
+    }    
     graph_to_file(&PathBuf::from("output/debug/graph.dot"), &code, &grafo).unwrap();
-    code.to_file(&PathBuf::from("output/debug/code.mepa"))
-        .unwrap();
+    code
+}
 
+pub fn otimizar_arquivo<P>(filename: P) -> io::Result<()>
+where
+    P: AsRef<Path>,
+{
+    let code = otimizar(MepaCode::from_file(&filename)?);
+    
+    code.to_file(&filename)
+        .unwrap();
     Ok(())
 }
 
@@ -62,6 +66,7 @@ fn fluxo(code: &mut MepaCode, grafo: &mut Graph<(usize, usize), ()>) -> bool {
     mudou
 }
 
+//se tem codigo inacessivel, remove
 fn elimidar_codigo_morto(code: &mut MepaCode, grafo: &mut Graph<(usize, usize), ()>) -> bool {
     println!("Eliminando codigo morto");
     let mut mudou = false;

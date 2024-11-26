@@ -2,6 +2,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::mepa::label::Label;
+use crate::otimizador;
 use crate::{ensure_is_token, is_token, mepa::instruction::Instruction};
 
 use super::error::CompileError;
@@ -975,9 +976,16 @@ impl Compiler {
     }
 }
 
-pub fn compile(origin: &PathBuf, target: &PathBuf) -> Result<io::Result<()>, CompileError> {
+pub fn compile(origin: &PathBuf, target: &PathBuf, otimizar:bool) -> Result<io::Result<()>, CompileError> {
     let mut c = Compiler::new(origin)?;
     c.program()?;
     println!("Compilado com sucesso!");
-    Ok(c.generated_code.to_file(target))
+    if otimizar{
+        let otimizado = otimizador::otimizar(c.generated_code);
+        println!("Otimizado com sucesso!");
+        Ok(otimizado.to_file(target))
+    }
+    else{
+        Ok(c.generated_code.to_file(target))
+    }
 }

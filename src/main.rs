@@ -1,4 +1,4 @@
-use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar};
+use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar_arquivo};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -142,12 +142,9 @@ fn handle_action(
                 output_path.clone()
             };
             println!("compilando {:?}", input_path.file_name().unwrap());
-            match compile(input_path, &output) {
+            match compile(input_path, &output, should_optimize) {
                 Ok(r) => match r {
                     Ok(_) => {
-                        if should_optimize{
-                            todo!()
-                        }
                         if should_debug {
                             machine::interactive_execution(&output_path, input_values.to_vec());
                         } else if should_run {
@@ -164,7 +161,7 @@ fn handle_action(
             }
         }
         "optimize" => {
-            otimizar(input_path).unwrap();
+            otimizar_arquivo(input_path).unwrap();
         }
         "run" => {
             machine::execute(input_path, input_values.to_vec());

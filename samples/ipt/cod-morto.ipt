@@ -1,0 +1,6 @@
+fn desnecessaria(){
+    return 1;
+}
+fn main(){    
+    return 0;
+}
