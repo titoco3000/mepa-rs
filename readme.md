@@ -105,7 +105,7 @@ Se não for especificado -o, o objeto produzido para a linha acima ficará em `o
 
 #### Otimização
 ```
-$ cargo run -- optimize samples/ipt/sort.ipt [-o output.o]
+$ cargo run -- optimize samples/mepa/sort.mepa [-o output.o]
 ```
 
 Se não for especificado -o, o objeto produzido para a linha acima ficará em `output/sort.opt.mepa`.
@@ -125,7 +125,7 @@ $ cargo run -- run samples/mepa/recursao.mepa
 Além disso, é possível encadear execução com a compilação: 
 
 ```
-$ cargo run -- compile samples/ipt/sort.ipt [--run | --debug]
+$ cargo run -- compile samples/ipt/sort.ipt [--run | --debug] [--optimize]
 ```
 
 #### Entrada

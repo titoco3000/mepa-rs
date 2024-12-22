@@ -1,11 +1,23 @@
 use super::grafo::{graph_to_file, map_code_to_graph};
 use super::pre_processamento::remover_rotulos_simbolicos;
+use super::var_mapping::mapear_variaveis;
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
 use petgraph::Graph;
 use std::io;
 use std::path::{Path, PathBuf};
+
+pub fn otimizar_arquivo<P>(filename: P) -> io::Result<()>
+where
+    P: AsRef<Path>,
+{
+    let code = otimizar(MepaCode::from_file(&filename)?);
+    
+    code.to_file(&filename)
+        .unwrap();
+    Ok(())
+}
 
 pub fn otimizar(code:MepaCode)->MepaCode{
     let mut code = remover_rotulos_simbolicos(code);
@@ -26,19 +38,9 @@ pub fn otimizar(code:MepaCode)->MepaCode{
             break; 
         }
     }    
+    mapear_variaveis(&code, &grafo);
     graph_to_file(&PathBuf::from("output/debug/graph.dot"), &code, &grafo).unwrap();
     code
-}
-
-pub fn otimizar_arquivo<P>(filename: P) -> io::Result<()>
-where
-    P: AsRef<Path>,
-{
-    let code = otimizar(MepaCode::from_file(&filename)?);
-    
-    code.to_file(&filename)
-        .unwrap();
-    Ok(())
 }
 
 //se tem um desvio que cai em outro desvio, pula direto para pos final

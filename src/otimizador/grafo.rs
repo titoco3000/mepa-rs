@@ -5,6 +5,7 @@ use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
 use petgraph::Graph;
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -194,4 +195,74 @@ pub fn graph_to_file(
 	
 		// Write the processed string to the file
 		write!(&file, "{}", processed_dot)
+}
+
+pub fn graph_to_file_with_memory_usage(
+    filename: &PathBuf,
+    code: &MepaCode,
+    graph: &Graph<(usize, usize), ()>,
+    memory_graph: &Graph<Vec<usize>, ()>,
+) -> io::Result<()> {
+    if let Some(parent) = filename.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Create or open the file
+    let file = File::create(filename)?;
+
+	let mut graph_with_code: Graph<String, ()> = Graph::new();
+	for (node_index, &(inicio, fim)) in graph.node_weights().enumerate() {
+        
+        let memory_usage = memory_graph
+            .node_weight(NodeIndex::new(node_index))
+            .unwrap();
+
+		let linhas_de_mepa:Vec<String> = (inicio..fim).map(|linha|format!("{}: {} - {}",linha, code[linha].1, memory_usage[linha-inicio])).collect();
+		let s = linhas_de_mepa.join("\n");
+		graph_with_code.add_node(s);
+	}
+
+	let arestas:Vec<(NodeIndex, NodeIndex)> =  graph.raw_edges()
+		.iter()
+		.map(|edge|(edge.source(), edge.target())).collect();
+
+		graph_with_code.extend_with_edges(&arestas);
+
+		let raw_dot = format!(
+			"{:?}",
+			Dot::with_config(&graph_with_code, &[Config::EdgeNoLabel])
+		);
+	
+		let processed_dot = raw_dot
+			.replace("\\\"", "")
+			.replace("\\\\", "\\")
+		;
+	
+		// Write the processed string to the file
+		write!(&file, "{}", processed_dot)
+}
+
+pub fn raw_graph_to_file<T>(
+    filename: &PathBuf,
+    graph: &Graph<T, ()>,
+) -> io::Result<()> where T:Debug{
+    if let Some(parent) = filename.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Create or open the file
+    let file = File::create(filename)?;
+
+    let raw_dot = format!(
+        "{:?}",
+        Dot::with_config(&graph, &[Config::EdgeNoLabel])
+    );
+	
+    let processed_dot = raw_dot
+        .replace("\\\"", "")
+        .replace("\\\\", "\\")
+    ;
+
+    // Write the processed string to the file
+    write!(&file, "{}", processed_dot)
 }

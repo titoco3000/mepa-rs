@@ -1,0 +1,11 @@
+fn inutil(){
+    return 1;
+}
+
+fn main(){
+    int arr[3], x;
+    if(x)
+        x = inutil();
+
+    return 0;
+}
