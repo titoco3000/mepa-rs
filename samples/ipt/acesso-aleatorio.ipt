@@ -1,0 +1,13 @@
+fn main(){
+    int arr[3];
+    int a, b, v[3], x, d;
+
+    v[0] = 10;
+    v[1] = 20;
+    v[2] = 30;
+
+    // read(x);
+
+    // print(v[x]);    
+    return 0;
+}

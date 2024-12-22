@@ -1,6 +1,6 @@
 use super::error::CompileError;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum VarType{
     Int,
     Ptr,

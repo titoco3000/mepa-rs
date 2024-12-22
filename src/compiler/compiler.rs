@@ -260,68 +260,40 @@ impl Compiler {
     fn declaration(&mut self) -> Result<Vec<(VarType, String, i32)>, CompileError> {
         let mut v = Vec::with_capacity(8);
         let var_type = self.vartype()?;
-        ensure_is_token!(
-            self.tokens.next(),
-            Token::Identifier(_),
-            self.tokens.current_line()
-        );
-        if let Token::Identifier(s) = self.tokens.consume()? {
-            let (size, is_array) = if is_token!(self.tokens.next(), Token::OpenBrackets) {
-                self.tokens.consume()?;
-                ensure_is_token!(
-                    self.tokens.next(),
-                    Token::Number(_),
-                    self.tokens.current_line()
-                );
-                if let Token::Number(n) = self.tokens.consume()? {
-                    ensure_is_token!(
-                        self.tokens.next(),
-                        Token::CloseBrackets,
-                        self.tokens.current_line()
-                    );
-                    self.tokens.consume()?;
-                    (n + 1, true)
-                } else {
-                    panic!() //impossivel de chegar aqui
-                }
-            } else {
-                (1, false)
-            };
-            v.push((if is_array { VarType::Array } else { var_type }, s, size));
-        }
-        while is_token!(self.tokens.next(), Token::Comma) {
-            self.tokens.consume()?;
+        let mut need_to_find_identifier = true;
+        while need_to_find_identifier {
             ensure_is_token!(
                 self.tokens.next(),
                 Token::Identifier(_),
                 self.tokens.current_line()
             );
             if let Token::Identifier(s) = self.tokens.consume()? {
-                v.push((
-                    var_type,
-                    s,
-                    if is_token!(self.tokens.next(), Token::OpenBrackets) {
-                        self.tokens.consume()?;
+                let (size, is_array) = if is_token!(self.tokens.next(), Token::OpenBrackets) {
+                    self.tokens.consume()?;
+                    ensure_is_token!(
+                        self.tokens.next(),
+                        Token::Number(_),
+                        self.tokens.current_line()
+                    );
+                    if let Token::Number(n) = self.tokens.consume()? {
                         ensure_is_token!(
                             self.tokens.next(),
-                            Token::Number(_),
+                            Token::CloseBrackets,
                             self.tokens.current_line()
                         );
-                        if let Token::Number(n) = self.tokens.consume()? {
-                            ensure_is_token!(
-                                self.tokens.next(),
-                                Token::CloseBrackets,
-                                self.tokens.current_line()
-                            );
-                            self.tokens.consume()?;
-                            n
-                        } else {
-                            panic!()
-                        }
+                        self.tokens.consume()?;
+                        (n + 1, true)
                     } else {
-                        1
-                    },
-                ));
+                        panic!() //impossivel de chegar aqui
+                    }
+                } else {
+                    (1, false)
+                };
+                v.push((if is_array { VarType::Array } else { var_type }, s, size));
+            }
+            need_to_find_identifier = is_token!(self.tokens.next(), Token::Comma);
+            if need_to_find_identifier{
+                self.tokens.consume()?;
             }
         }
         ensure_is_token!(
