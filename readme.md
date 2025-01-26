@@ -146,3 +146,7 @@ Quando input não for especificado, `LEIT` vai pedir entrada pelo stdin.
 $ cargo run -- compile samples/ipt 
 ```
 Nesse modo, todas as opções passadas (-o, --debug, etc) são aplicadas sequencialmente em cada arquivo.
+
+# Próximos passos
+
+- Melhorar o grafo de codigo para incluir todas as informações

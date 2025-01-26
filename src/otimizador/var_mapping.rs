@@ -1,13 +1,10 @@
 use super::grafo::graph_to_file_with_memory_usage;
-use super::grafo::{graph_to_file, map_code_to_graph};
-use super::pre_processamento::remover_rotulos_simbolicos;
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
-use crate::mepa::label::Label;
 use petgraph::{visit::Dfs, Graph};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-pub fn mapear_variaveis(code: &MepaCode, grafo: &Graph<(usize, usize), ()>) {
+pub fn mapear_variaveis(code: &MepaCode, grafo: &Graph<(usize, usize), ()>) -> Vec<Option<(usize, usize)>> {
     let mut memory_usage = Graph::<Vec<usize>, ()>::new();
 
     // Map old node indices to new node indices
@@ -35,7 +32,7 @@ pub fn mapear_variaveis(code: &MepaCode, grafo: &Graph<(usize, usize), ()>) {
     let mut dfs = Dfs::new(&*grafo, 0.into());
 
     while let Some(visited) = dfs.next(&*grafo) {
-        println!("Visitando o node {:?}", visited);
+        // println!("Visitando o node {:?}", visited);
         let (start, end) = *grafo.node_weight(visited).unwrap();
         let current_memory = memory_usage.node_weight(visited).unwrap();
         let mut current_value = *current_memory.last().unwrap_or(&0);
@@ -113,4 +110,82 @@ pub fn mapear_variaveis(code: &MepaCode, grafo: &Graph<(usize, usize), ()>) {
         &memory_usage,
     )
     .unwrap();
+
+    let mut instructions_mem_change = vec![None; code.len()];
+
+    for node_index in grafo.node_indices() {
+        let (start, end) = grafo.node_weight(node_index).unwrap();
+        for i in *start..*end {
+            println!("Instruction: {:?}", code[i]);
+            let next_instruction = 
+                if i+1 == *end{
+                    if let Some(neighbor) = grafo.neighbors(node_index).next() {
+                        let (neighbor_start, _neighbor_end) = grafo.node_weight(neighbor).unwrap();
+                        Some((neighbor, *neighbor_start))
+                    }
+                    else {
+                        None
+                    }
+                }
+                else{
+                    Some((node_index, i + 1))
+                };
+            if let Some((next_inst_node, next_instruction_index)) = next_instruction {
+                // get the memory usage of the current instruction and the next
+                let current_memory = memory_usage.node_weight(node_index).unwrap()[i - *start];
+                // get the memory usage of the next instruction
+                let (next_node_start, _) = grafo.node_weight(next_inst_node).unwrap();
+                let next_memory = memory_usage.node_weight(next_inst_node).unwrap()[next_instruction_index - *next_node_start];
+                
+                if current_memory!=next_memory{
+                    instructions_mem_change[i] = Some((current_memory, next_memory));
+                }
+            }
+        }
+    }
+    // iterate over the instructions breadth first
+    let mut bfs = petgraph::visit::Bfs::new(&*grafo, node_map[&0.into()]);
+    let mut last_dealloc = None;
+    let mut lifetimes = vec![None; code.len()];
+    while let Some(node) = bfs.next(&*grafo) {
+        let (start, end) = grafo.node_weight(node).unwrap();
+        for i in *start..*end {
+            // println!("Instruction a: {:?}", i);
+            if let Some((aloc_start_mem, aloc_end_mem)) = instructions_mem_change[i] {
+                if aloc_start_mem < aloc_end_mem {
+                    println!("Instruction {} changes memory from {} to {}", i, instructions_mem_change[i].unwrap().0, instructions_mem_change[i].unwrap().1);
+                    // do a breadth first search printing all indexes starting at the current instruction
+                    let mut bfs = petgraph::visit::Bfs::new(&*grafo, node_map[&node]);
+                    let mut found = false;
+                    while let Some(inner_node) = bfs.next(&*grafo) {
+                        let (start, end) = grafo.node_weight(inner_node).unwrap();
+                        for j in (if node == inner_node { i + 1 } else { *start })..*end {
+                            // println!("Instruction b: {:?}", j);
+                            if let Some((_dealoc_start_mem, dealoc_end_mem)) = instructions_mem_change[j] {
+                                if _dealoc_start_mem > dealoc_end_mem && dealoc_end_mem == aloc_start_mem {
+                                    println!("Instruction {} changes back", j);
+                                    lifetimes[i] = Some((i, j));
+
+                                    last_dealloc = Some(j);
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if found {
+                            break;
+                        }
+                    }
+                    if !found {
+                        if let Some(last_dealloc) = last_dealloc {
+                            lifetimes[i] = Some((i, last_dealloc));
+                        } else {
+                            panic!("todo");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return lifetimes;
 }
