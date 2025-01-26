@@ -150,3 +150,4 @@ Nesse modo, todas as opções passadas (-o, --debug, etc) são aplicadas sequenc
 # Próximos passos
 
 - Melhorar o grafo de codigo para incluir todas as informações
+- Adicionar nele opções de exportação
