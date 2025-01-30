@@ -1,4 +1,4 @@
-use super::grafo::{graph_to_file, map_code_to_graph};
+use super::grafo::{graph_to_file, map_code_to_graph, CodeGraph};
 use super::pre_processamento::remover_rotulos_simbolicos;
 use super::var_mapping::mapear_variaveis;
 use crate::mepa::code::MepaCode;
@@ -20,6 +20,8 @@ where
 }
 
 pub fn otimizar(code:MepaCode)->MepaCode{
+    CodeGraph::new(code.clone()).export_to_file(&PathBuf::from("output/debug/B.dot")).unwrap();
+
     let mut code = remover_rotulos_simbolicos(code);
     let mut grafo = map_code_to_graph(&code);
 
@@ -39,7 +41,10 @@ pub fn otimizar(code:MepaCode)->MepaCode{
         }
     }    
     mapear_variaveis(&code, &grafo);
-    graph_to_file(&PathBuf::from("output/debug/graph.dot"), &code, &grafo).unwrap();
+
+
+    graph_to_file(&PathBuf::from("output/debug/A.dot"), &code, &grafo).unwrap();
+
     code
 }
 
