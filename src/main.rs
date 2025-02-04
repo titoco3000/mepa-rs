@@ -7,7 +7,7 @@ const DEBUG: bool = false;
 
 fn main() {
     if DEBUG {
-        //algo aqui que queira debugar
+        compile(&PathBuf::from("samples/ipt/sort.ipt"), &PathBuf::from("output/sort.mepa"), false).unwrap().unwrap();
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")

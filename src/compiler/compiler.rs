@@ -98,23 +98,24 @@ impl Compiler {
 
             self.commands()?;
 
-            ensure_is_token!(
-                self.tokens.next(),
-                Token::Return,
-                self.tokens.current_line()
-            );
-            self.tokens.consume()?;
-            self.expression()?;
-            //store at reserved position
+            if is_token!(self.tokens.next(), Token::Return){
+                self.tokens.consume()?;
+                self.expression()?;
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::SemiColon,
+                    self.tokens.current_line()
+                );
+                self.tokens.consume()?;
+            }
+            else{
+                self.generated_code
+                .insert((None, Instruction::CRCT(0)));
+            }
+            //store at reserved return position
             self.generated_code
                 .insert((None, Instruction::ARMZ(1, -(3 + l))));
 
-            ensure_is_token!(
-                self.tokens.next(),
-                Token::SemiColon,
-                self.tokens.current_line()
-            );
-            self.tokens.consume()?;
             ensure_is_token!(
                 self.tokens.next(),
                 Token::CloseBraces,
@@ -136,6 +137,7 @@ impl Compiler {
     }
     fn declarations(&mut self) -> Result<usize, CompileError> {
         let mut v = Vec::with_capacity(8);
+        println!("Em declaracoes de {:?}",self.current_function);
         while is_token!(self.tokens.next(), Token::Int) || is_token!(self.tokens.next(), Token::Ptr)
         {
             v.append(&mut self.declaration()?);
@@ -499,15 +501,28 @@ impl Compiler {
     fn command(&mut self) -> Result<(), CompileError> {
         if is_token!(self.tokens.next(), Token::OpenBraces) {
             self.command_block()?;
-        } else if is_token!(self.tokens.next(), Token::Identifier(_))
-            || is_token!(self.tokens.next(), Token::Asterisc)
-        {
+        } 
+        else if is_token!(self.tokens.next(), Token::Asterisc){
             self.attribuition()?;
             ensure_is_token!(
                 self.tokens.next(),
                 Token::SemiColon,
                 self.tokens.current_line()
             );
+        }
+        else if is_token!(self.tokens.next(), Token::Identifier(_))
+        {
+            if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis){
+                self.function_call()?;
+                self.generated_code.insert((None, Instruction::DMEM(1)));
+            }else{
+                self.attribuition()?;
+                ensure_is_token!(
+                    self.tokens.next(),
+                    Token::SemiColon,
+                    self.tokens.current_line()
+                );
+            }
             self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::If) {
             self.if_command()?;

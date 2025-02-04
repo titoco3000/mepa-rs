@@ -24,7 +24,7 @@ Para mais detalhes sobre a gramática da linguagem, consulte o arquivo [gramatic
 
 ## Estrutura da Linguagem
 
-A linguagem *ipt* segue uma estrutura simples, inspirada em C. O código é composto por funções, que devem sempre retornar um valor. Todas as variáveis, tanto no escopo global quanto no local, devem ser declaradas no início de um bloco de código.
+A linguagem *ipt* segue uma estrutura simples, inspirada em C. O código é composto por funções. Cada função pode ter um unico retorno, no final do bloco; se não tiver, será implicitamente retornado um 0. O valor deste retorno não precisa ser usado. Todas as variáveis, tanto no escopo global quanto no local, devem ser declaradas no início de um bloco de código.
 
 Exemplo de uma função `bubble_sort` na linguagem *ipt*:
 
@@ -49,7 +49,7 @@ fn bubble_sort(ptr arr, int n){
 ```
 Para ser válido, um programa em *ipt* deve possuir uma função `main`. Assim, o menor programa válido possível é:
 ```c
-fn main(){return 0;}
+fn main(){}
 ```
 
 ---
@@ -75,7 +75,7 @@ int arr[10];  // Array estático de 10 inteiros
 
 ## Sintaxe de Funções
 
-Funções na linguagem *ipt* são declaradas com `fn`. Toda função deve retornar um valor, e o retorno precisa ser consumido (armazenado ou utilizado em uma expressão).
+Funções na linguagem *ipt* são declaradas com `fn` e podem receber argumentos passados por valor. 
 
 ### Exemplo de Função
 
@@ -87,16 +87,16 @@ fn nome_da_funcao(tipo1 param1, tipo2 param2){
     // Corpo da função
     // ...
 
-    return valor;
+    return valor; //opcional
 }
 ```
 
 ### Chamadas de Função
 
-As funções são chamadas passando argumentos por valor. Arrays devem ser passados com o uso de ponteiros.
+As funções são chamadas passando argumentos por valor. 
 
 ```c
-x = bubble_sort(&arr, tamanho);
+x = bubble_sort(arr, tamanho);
 ```
 
 ---
