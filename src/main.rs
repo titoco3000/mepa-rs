@@ -3,11 +3,11 @@ use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar_a
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 fn main() {
     if DEBUG {
-        compile(&PathBuf::from("samples/ipt/sort.ipt"), &PathBuf::from("output/sort.mepa"), false).unwrap().unwrap();
+        compile(&PathBuf::from("samples/ipt/sort.ipt"), &PathBuf::from("output/sort.mepa"), true).unwrap().unwrap();
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")

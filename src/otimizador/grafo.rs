@@ -1,14 +1,14 @@
 use crate::mepa::code::MepaCode;
-use crate::mepa::instruction::Instruction;
+use crate::mepa::instruction::{self, Instruction};
 use crate::mepa::label::Label;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
 use petgraph::{visit::Dfs, Graph};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fmt::Debug;
 use std::fs::{self, File};
 use std::io::{self, Write};
+use std::iter::Fuse;
 use std::path::PathBuf;
 use std::usize;
 
@@ -256,24 +256,24 @@ pub fn graph_to_file_with_memory_usage(
     write!(&file, "{}", processed_dot)
 }
 
-pub fn raw_graph_to_file<T>(filename: &PathBuf, graph: &Graph<T, ()>) -> io::Result<()>
-where
-    T: Debug,
-{
-    if let Some(parent) = filename.parent() {
-        fs::create_dir_all(parent)?;
-    }
+// pub fn raw_graph_to_file<T>(filename: &PathBuf, graph: &Graph<T, ()>) -> io::Result<()>
+// where
+//     T: Debug,
+// {
+//     if let Some(parent) = filename.parent() {
+//         fs::create_dir_all(parent)?;
+//     }
 
-    // Create or open the file
-    let file = File::create(filename)?;
+//     // Create or open the file
+//     let file = File::create(filename)?;
 
-    let raw_dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
+//     let raw_dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
 
-    let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
+//     let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
 
-    // Write the processed string to the file
-    write!(&file, "{}", processed_dot)
-}
+//     // Write the processed string to the file
+//     write!(&file, "{}", processed_dot)
+// }
 
 struct InstructionAndMetadata {
     address: usize,
@@ -282,14 +282,27 @@ struct InstructionAndMetadata {
     liberation_address: Option<usize>,
 }
 
-pub struct CodeGraph(Graph<Vec<InstructionAndMetadata>, ()>);
+struct FuncMetadata {
+    addr_inicio: usize,
+    addr_retorno: usize,
+    acesso: usize, //maximo de memoria acessado externo
+    args: usize,
+}
+
+pub struct CodeGraph {
+    grafo: Graph<Vec<InstructionAndMetadata>, ()>,
+    funcoes: Vec<FuncMetadata>,
+}
 
 impl CodeGraph {
     pub fn new(mut code: MepaCode) -> CodeGraph {
         // este pré-processamento deve ser feito para que a montagem do grafo funcione normalmente
         code = remover_rotulos_simbolicos(code);
 
-        let mut grafo = CodeGraph(Graph::new());
+        let mut grafo = CodeGraph {
+            grafo: Graph::new(),
+            funcoes: Vec::new(),
+        };
 
         let mut lideres: Vec<usize> = code
             .iter()
@@ -334,14 +347,14 @@ impl CodeGraph {
                         liberation_address: None,
                     })
                     .collect();
-                grafo.0.add_node(instructions)
+                grafo.grafo.add_node(instructions)
             })
             .collect();
 
         let mut arestas: Vec<(NodeIndex, NodeIndex)> = Vec::with_capacity(code.len());
 
         for block_index in &vertices {
-            let linhas = grafo.0.node_weight(*block_index).unwrap();
+            let linhas = grafo.grafo.node_weight(*block_index).unwrap();
 
             for linha in linhas {
                 match &linha.instruction {
@@ -370,42 +383,42 @@ impl CodeGraph {
                             arestas.push((*block_index, target_block));
                         }
                     }
-                    Instruction::CHPR(label) => {
-                        if let Label::Literal(jmp_addr) = label {
-                            // adiciona o vertice que contem o endereco label
-                            let target_block = grafo
-                                .locate_address(*jmp_addr)
-                                .expect("Address not found in groupings");
-                            arestas.push((*block_index, target_block));
-                            let next_block = grafo
-                                .locate_address(linha.address + 1)
-                                .expect("Address not found in groupings");
+                    // Instruction::CHPR(label) => {
+                    //     if let Label::Literal(jmp_addr) = label {
+                    //         // adiciona o vertice que contem o endereco label
+                    //         let target_block = grafo
+                    //             .locate_address(*jmp_addr)
+                    //             .expect("Address not found in groupings");
+                    //         arestas.push((*block_index, target_block));
+                    //         let next_block = grafo
+                    //             .locate_address(linha.address + 1)
+                    //             .expect("Address not found in groupings");
 
-                            // encontra o retorno RTPR correspondente e adiciona uma transicao dele para a proxima instrucao
-                            let return_addr = code
-                                .iter()
-                                .enumerate()
-                                .skip(*jmp_addr)
-                                .find_map(|(ret_addr, (_, inst))| {
-                                    if let Instruction::RTPR(_, _) = inst {
-                                        println!(
-                                            "Para o CHPR {} encontrou o RTPR {}",
-                                            linha.address, ret_addr
-                                        );
-                                        Some(ret_addr)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .expect("RTPR not found");
-                            let return_block = grafo
-                                .locate_address(return_addr)
-                                .expect("Address not found in groupings");
-                            arestas.push((return_block, next_block));
-                        } else {
-                            panic!("não removeu labels simbolicos")
-                        }
-                    }
+                    //         // encontra o retorno RTPR correspondente e adiciona uma transicao dele para a proxima instrucao
+                    //         let return_addr = code
+                    //             .iter()
+                    //             .enumerate()
+                    //             .skip(*jmp_addr)
+                    //             .find_map(|(ret_addr, (_, inst))| {
+                    //                 if let Instruction::RTPR(_, _) = inst {
+                    //                     println!(
+                    //                         "Para o CHPR {} encontrou o RTPR {}",
+                    //                         linha.address, ret_addr
+                    //                     );
+                    //                     Some(ret_addr)
+                    //                 } else {
+                    //                     None
+                    //                 }
+                    //             })
+                    //             .expect("RTPR not found");
+                    //         let return_block = grafo
+                    //             .locate_address(return_addr)
+                    //             .expect("Address not found in groupings");
+                    //         arestas.push((return_block, next_block));
+                    //     } else {
+                    //         panic!("não removeu labels simbolicos")
+                    //     }
+                    // }
                     Instruction::PARA | Instruction::RTPR(_, _) => (),
                     _ => {
                         if linha.address == linhas.last().unwrap().address {
@@ -419,107 +432,239 @@ impl CodeGraph {
             }
         }
 
-        grafo.0.extend_with_edges(&arestas);
+        grafo.grafo.extend_with_edges(&arestas);
 
         // mapeia o uso de memoria
 
-        // primeira instrucao usa 0
-        grafo
-            .0
-            .node_weight_mut(0.into())
-            .unwrap()
-            .first_mut()
-            .unwrap()
-            .memory_usage = Some(0);
+        grafo.funcoes = {
+            let mut addr_inicio = 0;
+            grafo
+                .instructions_mut()
+                .filter_map(|instruction| match instruction.instruction {
+                    Instruction::ENPR(_) => {
+                        addr_inicio = instruction.address;
+                        None
+                    }
+                    Instruction::RTPR(_, args) => Some(FuncMetadata {
+                        addr_inicio,
+                        addr_retorno: instruction.address,
+                        acesso: 0,
+                        args: args as usize,
+                    }),
+                    _ => None,
+                })
+                .collect()
+        };
 
-        // Use DFS for graph traversal
-        let mut dfs = Dfs::new(&grafo.0, 0.into());
+        let raizes: Vec<NodeIndex> = grafo
+            .funcoes
+            .iter()
+            .map(|func| grafo.locate_address(func.addr_inicio).unwrap().clone())
+            .chain(std::iter::once(0.into()))
+            .collect();
+        for raiz in raizes {
+            // primeira instrucao usa 0
+            grafo
+                .grafo
+                .node_weight_mut(raiz)
+                .unwrap()
+                .first_mut()
+                .unwrap()
+                .memory_usage = Some(0);
+            let mut dfs = Dfs::new(&grafo.grafo, raiz);
 
-        let mut inconsistent_memory_usage = false;
+            let mut inconsistent_memory_usage = false;
 
-        while let Some(visited) = dfs.next(&grafo.0) {
-            println!("Visitando o node {:?}", visited);
-            let neighbors: Vec<NodeIndex> = grafo.0.neighbors(visited).map(|n| n.clone()).collect();
-            let lines = grafo.0.node_weight_mut(visited).unwrap();
-            let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-            for line in 0..lines.len() {
-                memory += match lines[line].instruction {
-                    Instruction::CRCT(_)
-                    | Instruction::CRVL(_, _)
-                    | Instruction::CREN(_, _)
-                    | Instruction::CRVI(_, _)
-                    | Instruction::LEIT
-                    | Instruction::CHPR(_)
-                    | Instruction::ENPR(_) => 1,
-                    Instruction::ARMZ(_, _)
-                    | Instruction::ARMI(_, _)
-                    | Instruction::SOMA
-                    | Instruction::SUBT
-                    | Instruction::MULT
-                    | Instruction::DIVI
-                    | Instruction::CONJ
-                    | Instruction::DISJ
-                    | Instruction::CMME
-                    | Instruction::CMMA
-                    | Instruction::CMIG
-                    | Instruction::CMDG
-                    | Instruction::CMEG
-                    | Instruction::CMAG
-                    | Instruction::DSVF(_)
-                    | Instruction::IMPR => -1,
-                    Instruction::AMEM(n) => n,
-                    Instruction::DMEM(n) => -n,
-                    Instruction::RTPR(_, n) => -n - 2,
-                    _ => 0,
-                };
-                // assign to the next line, if available
-                if line + 1 < lines.len() {
-                    lines[line + 1].memory_usage = Some(memory as usize);
-                }
-            }
-            // Propagate to neighbors
-            for neighbor_index in neighbors.into_iter() {
-                let neighbor = grafo
-                    .0
-                    .node_weight_mut(neighbor_index)
-                    .unwrap()
-                    .first_mut()
-                    .unwrap();
-                if let Some(existing_value) = neighbor.memory_usage {
-                    if existing_value != memory as usize {
-                        inconsistent_memory_usage = true;
-                        break;
+            while let Some(visited) = dfs.next(&grafo.grafo) {
+                println!("Visitando o node {:?}", visited);
+                let neighbors: Vec<NodeIndex> =
+                    grafo.grafo.neighbors(visited).map(|n| n.clone()).collect();
+                let lines = grafo.grafo.node_weight_mut(visited).unwrap();
+                let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+                for line in 0..lines.len() {
+                    memory += match &lines[line].instruction {
+                        Instruction::CRCT(_)
+                        | Instruction::CRVL(_, _)
+                        | Instruction::CREN(_, _)
+                        | Instruction::CRVI(_, _)
+                        | Instruction::LEIT
+                        | Instruction::ENPR(_) => 1,
+                        Instruction::ARMZ(_, _)
+                        | Instruction::ARMI(_, _)
+                        | Instruction::SOMA
+                        | Instruction::SUBT
+                        | Instruction::MULT
+                        | Instruction::DIVI
+                        | Instruction::CONJ
+                        | Instruction::DISJ
+                        | Instruction::CMME
+                        | Instruction::CMMA
+                        | Instruction::CMIG
+                        | Instruction::CMDG
+                        | Instruction::CMEG
+                        | Instruction::CMAG
+                        | Instruction::DSVF(_)
+                        | Instruction::IMPR => -1,
+                        Instruction::AMEM(n) => *n,
+                        Instruction::DMEM(n) => -n,
+                        Instruction::RTPR(_, n) => -n - 2,
+                        Instruction::CHPR(k) => {
+                            //locate the function
+                            - (grafo.funcoes.iter().find(|f|f.addr_inicio==k.unwrap()).unwrap().args as i32)
+                        },
+                        _ => 0,
+                    };
+                    // assign to the next line, if available
+                    if line + 1 < lines.len() {
+                        lines[line + 1].memory_usage = Some(memory as usize);
                     }
                 }
-                neighbor.memory_usage = Some(memory as usize);
-            }
-            if inconsistent_memory_usage {
-                break;
-            }
-        }
-
-        if inconsistent_memory_usage {
-            for block in grafo.0.node_weights_mut() {
-                for line in block{
-                    line.memory_usage = None;
-                    line.liberation_address = None;
+                // Propagate to neighbors
+                for neighbor_index in neighbors.into_iter() {
+                    let neighbor = grafo
+                        .grafo
+                        .node_weight_mut(neighbor_index)
+                        .unwrap()
+                        .first_mut()
+                        .unwrap();
+                    if let Some(existing_value) = neighbor.memory_usage {
+                        if existing_value != memory as usize {
+                            inconsistent_memory_usage = true;
+                            break;
+                        }
+                    }
+                    neighbor.memory_usage = Some(memory as usize);
+                }
+                if inconsistent_memory_usage {
+                    break;
                 }
             }
         }
+
+        // for funcao in &grafo.funcoes {
+        //     let mut dfs_stack = Vec::with_capacity(grafo.grafo.node_count());
+        //     let mut visited = Vec::with_capacity(grafo.grafo.node_count());
+        //     dfs_stack.push(grafo.locate_address(funcao.addr_inicio).unwrap());
+
+        //     while let Some(node) = dfs_stack.pop() {
+        //         visited.push(node);
+        //         let lines = grafo.grafo.node_weight(node).unwrap();
+        //         let start = lines[0].address;
+        //         let end = lines.last().unwrap().address;
+        //         println!("Visiting node with addr: {}", start);
+
+        //         if funcao.addr_retorno >= start && funcao.addr_retorno <= end {
+        //             println!("Achou retorno de {}", funcao.addr_inicio);
+        //         } else {
+        //             for n in grafo
+        //                 .grafo
+        //                 .neighbors_directed(node, petgraph::Direction::Outgoing)
+        //             {
+        //                 if !visited.contains(&n) && !dfs_stack.contains(&n) {
+        //                     dfs_stack.push(n);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
+        // primeira instrucao usa 0
+        // grafo
+        //     .grafo
+        //     .node_weight_mut(0.into())
+        //     .unwrap()
+        //     .first_mut()
+        //     .unwrap()
+        //     .memory_usage = Some(0);
+
+        // // Use DFS for graph traversal
+        // let mut dfs = Dfs::new(&grafo.grafo, 0.into());
+
+        // let mut inconsistent_memory_usage = false;
+
+        // while let Some(visited) = dfs.next(&grafo.grafo) {
+        //     println!("Visitando o node {:?}", visited);
+        //     let neighbors: Vec<NodeIndex> = grafo.grafo.neighbors(visited).map(|n| n.clone()).collect();
+        //     let lines = grafo.grafo.node_weight_mut(visited).unwrap();
+        //     let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+        //     for line in 0..lines.len() {
+        //         memory += match lines[line].instruction {
+        //             Instruction::CRCT(_)
+        //             | Instruction::CRVL(_, _)
+        //             | Instruction::CREN(_, _)
+        //             | Instruction::CRVI(_, _)
+        //             | Instruction::LEIT
+        //             | Instruction::CHPR(_)
+        //             | Instruction::ENPR(_) => 1,
+        //             Instruction::ARMZ(_, _)
+        //             | Instruction::ARMI(_, _)
+        //             | Instruction::SOMA
+        //             | Instruction::SUBT
+        //             | Instruction::MULT
+        //             | Instruction::DIVI
+        //             | Instruction::CONJ
+        //             | Instruction::DISJ
+        //             | Instruction::CMME
+        //             | Instruction::CMMA
+        //             | Instruction::CMIG
+        //             | Instruction::CMDG
+        //             | Instruction::CMEG
+        //             | Instruction::CMAG
+        //             | Instruction::DSVF(_)
+        //             | Instruction::IMPR => -1,
+        //             Instruction::AMEM(n) => n,
+        //             Instruction::DMEM(n) => -n,
+        //             Instruction::RTPR(_, n) => -n - 2,
+        //             _ => 0,
+        //         };
+        //         // assign to the next line, if available
+        //         if line + 1 < lines.len() {
+        //             lines[line + 1].memory_usage = Some(memory as usize);
+        //         }
+        //     }
+        //     // Propagate to neighbors
+        //     for neighbor_index in neighbors.into_iter() {
+        //         let neighbor = grafo
+        //             .grafo
+        //             .node_weight_mut(neighbor_index)
+        //             .unwrap()
+        //             .first_mut()
+        //             .unwrap();
+        //         if let Some(existing_value) = neighbor.memory_usage {
+        //             if existing_value != memory as usize {
+        //                 inconsistent_memory_usage = true;
+        //                 break;
+        //             }
+        //         }
+        //         neighbor.memory_usage = Some(memory as usize);
+        //     }
+        //     if inconsistent_memory_usage {
+        //         break;
+        //     }
+        // }
+
+        // if inconsistent_memory_usage {
+        //     for block in grafo.grafo.node_weights_mut() {
+        //         for line in block{
+        //             line.memory_usage = None;
+        //             line.liberation_address = None;
+        //         }
+        //     }
+        // }
 
         grafo
     }
 
     fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
-        self.0.node_indices().find(|&output_index| {
+        self.grafo.node_indices().find(|&output_index| {
             let (start, end) = (
-                self.0
+                self.grafo
                     .node_weight(output_index)
                     .unwrap()
                     .first()
                     .unwrap()
                     .address,
-                self.0
+                self.grafo
                     .node_weight(output_index)
                     .unwrap()
                     .last()
@@ -528,6 +673,21 @@ impl CodeGraph {
             );
             addr >= start && addr <= end
         })
+    }
+
+    pub fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
+        // Collect all instructions from all nodes
+        let mut instructions: Vec<_> = self
+            .grafo
+            .node_weights_mut()
+            .flat_map(|node_instructions| node_instructions.iter_mut())
+            .collect();
+
+        // Sort instructions by address
+        instructions.sort_by_key(|instr| instr.address);
+
+        // Return an iterator over mutable references
+        instructions.into_iter()
     }
 
     pub fn remove_instruction(addr: usize) {}
@@ -541,7 +701,7 @@ impl CodeGraph {
         let file = File::create(filename)?;
 
         let mut graph_with_code: Graph<String, ()> = Graph::new();
-        for instructions in self.0.node_weights() {
+        for instructions in self.grafo.node_weights() {
             let linhas_de_mepa: Vec<String> = instructions
                 .iter()
                 .map(|linha| {
@@ -562,7 +722,7 @@ impl CodeGraph {
         }
 
         let arestas: Vec<(NodeIndex, NodeIndex)> = self
-            .0
+            .grafo
             .raw_edges()
             .iter()
             .map(|edge| (edge.source(), edge.target()))

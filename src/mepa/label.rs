@@ -28,6 +28,12 @@ impl Label {
     pub fn new(id:usize)->Label{
         Self::Simbolic(format!("L{}",id))
     }
+    pub fn unwrap(&self)->usize{
+        match self {
+            Self::Literal(n)=>*n,
+            Self::Simbolic(_)=>panic!("unwrap em label simbolica")
+        }
+    }
 }
 impl FromStr for Label {
     type Err = &'static str;
