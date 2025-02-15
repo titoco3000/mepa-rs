@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fs::{self, File};
 use std::io::{self, Write};
-use std::iter::Fuse;
 use std::path::PathBuf;
 use std::usize;
 
@@ -275,10 +274,12 @@ pub fn graph_to_file_with_memory_usage(
 //     write!(&file, "{}", processed_dot)
 // }
 
+#[derive(Debug, Clone)]
 struct InstructionAndMetadata {
     address: usize,
     instruction: Instruction,
     memory_usage: Option<usize>,
+    memory_delta: i32,
     liberation_address: Option<usize>,
 }
 
@@ -344,6 +345,7 @@ impl CodeGraph {
                         address: addr,
                         instruction: code[addr].1.clone(),
                         memory_usage: None,
+                        memory_delta: 0,
                         liberation_address: None,
                     })
                     .collect();
@@ -436,6 +438,7 @@ impl CodeGraph {
 
         // mapeia o uso de memoria
 
+        //localiza todas as funcoes (inicio e fim)
         grafo.funcoes = {
             let mut addr_inicio = 0;
             grafo
@@ -456,12 +459,17 @@ impl CodeGraph {
                 .collect()
         };
 
+        // lista as raizes: inicios de funcao e inicio do programa
         let raizes: Vec<NodeIndex> = grafo
             .funcoes
             .iter()
             .map(|func| grafo.locate_address(func.addr_inicio).unwrap().clone())
             .chain(std::iter::once(0.into()))
             .collect();
+
+        let mut inconsistent_memory_usage = false;
+
+        // mapeia total de memoria alocada em cada instrucao e diferença da ultima
         for raiz in raizes {
             // primeira instrucao usa 0
             grafo
@@ -471,9 +479,11 @@ impl CodeGraph {
                 .first_mut()
                 .unwrap()
                 .memory_usage = Some(0);
+
             let mut dfs = Dfs::new(&grafo.grafo, raiz);
 
-            let mut inconsistent_memory_usage = false;
+            let mut alocation_stack = Vec::new();
+            let mut alocation_map = Vec::new();
 
             while let Some(visited) = dfs.next(&grafo.grafo) {
                 println!("Visitando o node {:?}", visited);
@@ -481,6 +491,7 @@ impl CodeGraph {
                     grafo.grafo.neighbors(visited).map(|n| n.clone()).collect();
                 let lines = grafo.grafo.node_weight_mut(visited).unwrap();
                 let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+                let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
                 for line in 0..lines.len() {
                     memory += match &lines[line].instruction {
                         Instruction::CRCT(_)
@@ -510,10 +521,35 @@ impl CodeGraph {
                         Instruction::RTPR(_, n) => -n - 2,
                         Instruction::CHPR(k) => {
                             //locate the function
-                            - (grafo.funcoes.iter().find(|f|f.addr_inicio==k.unwrap()).unwrap().args as i32)
-                        },
+                            -(grafo
+                                .funcoes
+                                .iter()
+                                .find(|f| f.addr_inicio == k.unwrap())
+                                .unwrap()
+                                .args as i32)
+                        }
                         _ => 0,
                     };
+                    let memory_delta = memory - last_memory;
+                    if memory_delta>0{
+                        alocation_stack.push((lines[line].address, memory));
+                    }
+                    else if memory_delta<0{
+                        // for each item on the stack, from last to first
+                        while let Some(&top) = alocation_stack.last() {
+                            // if it is greater or equal than memory, pop
+                            if top.1 >= memory {
+                                alocation_stack.pop();
+                                alocation_map.push((top.0, lines[line].address));
+                            } 
+                            // else, stop
+                            else {
+                                break;
+                            }
+                        }
+                    }
+                    lines[line].memory_delta = memory_delta;
+                    last_memory = memory;
                     // assign to the next line, if available
                     if line + 1 < lines.len() {
                         lines[line + 1].memory_usage = Some(memory as usize);
@@ -539,118 +575,53 @@ impl CodeGraph {
                     break;
                 }
             }
+        
+            for (aloc, dealoc) in alocation_map{
+                grafo.instruction_mut(aloc).unwrap().liberation_address = Some(dealoc);
+            }
         }
 
-        // for funcao in &grafo.funcoes {
-        //     let mut dfs_stack = Vec::with_capacity(grafo.grafo.node_count());
-        //     let mut visited = Vec::with_capacity(grafo.grafo.node_count());
-        //     dfs_stack.push(grafo.locate_address(funcao.addr_inicio).unwrap());
+        if inconsistent_memory_usage {
+            for line in grafo.instructions_mut() {
+                line.memory_usage = None;
+            }
+        } else {
+            let alocs: Vec<InstructionAndMetadata> = grafo
+                .instructions_mut()
+                .filter_map(|i| {
+                    if i.memory_delta > 0 {
+                        Some(i.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
-        //     while let Some(node) = dfs_stack.pop() {
-        //         visited.push(node);
-        //         let lines = grafo.grafo.node_weight(node).unwrap();
-        //         let start = lines[0].address;
-        //         let end = lines.last().unwrap().address;
-        //         println!("Visiting node with addr: {}", start);
+            // para cada instrucao com delta positivo, encontrar aquela que retorna o valor para o original
+            for aloc in alocs {
+                let node_inicio = grafo.locate_address(aloc.address).unwrap();
+                let mut dfs = Dfs::new(&grafo.grafo, node_inicio);
 
-        //         if funcao.addr_retorno >= start && funcao.addr_retorno <= end {
-        //             println!("Achou retorno de {}", funcao.addr_inicio);
-        //         } else {
-        //             for n in grafo
-        //                 .grafo
-        //                 .neighbors_directed(node, petgraph::Direction::Outgoing)
-        //             {
-        //                 if !visited.contains(&n) && !dfs_stack.contains(&n) {
-        //                     dfs_stack.push(n);
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }
-
-        // primeira instrucao usa 0
-        // grafo
-        //     .grafo
-        //     .node_weight_mut(0.into())
-        //     .unwrap()
-        //     .first_mut()
-        //     .unwrap()
-        //     .memory_usage = Some(0);
-
-        // // Use DFS for graph traversal
-        // let mut dfs = Dfs::new(&grafo.grafo, 0.into());
-
-        // let mut inconsistent_memory_usage = false;
-
-        // while let Some(visited) = dfs.next(&grafo.grafo) {
-        //     println!("Visitando o node {:?}", visited);
-        //     let neighbors: Vec<NodeIndex> = grafo.grafo.neighbors(visited).map(|n| n.clone()).collect();
-        //     let lines = grafo.grafo.node_weight_mut(visited).unwrap();
-        //     let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-        //     for line in 0..lines.len() {
-        //         memory += match lines[line].instruction {
-        //             Instruction::CRCT(_)
-        //             | Instruction::CRVL(_, _)
-        //             | Instruction::CREN(_, _)
-        //             | Instruction::CRVI(_, _)
-        //             | Instruction::LEIT
-        //             | Instruction::CHPR(_)
-        //             | Instruction::ENPR(_) => 1,
-        //             Instruction::ARMZ(_, _)
-        //             | Instruction::ARMI(_, _)
-        //             | Instruction::SOMA
-        //             | Instruction::SUBT
-        //             | Instruction::MULT
-        //             | Instruction::DIVI
-        //             | Instruction::CONJ
-        //             | Instruction::DISJ
-        //             | Instruction::CMME
-        //             | Instruction::CMMA
-        //             | Instruction::CMIG
-        //             | Instruction::CMDG
-        //             | Instruction::CMEG
-        //             | Instruction::CMAG
-        //             | Instruction::DSVF(_)
-        //             | Instruction::IMPR => -1,
-        //             Instruction::AMEM(n) => n,
-        //             Instruction::DMEM(n) => -n,
-        //             Instruction::RTPR(_, n) => -n - 2,
-        //             _ => 0,
-        //         };
-        //         // assign to the next line, if available
-        //         if line + 1 < lines.len() {
-        //             lines[line + 1].memory_usage = Some(memory as usize);
-        //         }
-        //     }
-        //     // Propagate to neighbors
-        //     for neighbor_index in neighbors.into_iter() {
-        //         let neighbor = grafo
-        //             .grafo
-        //             .node_weight_mut(neighbor_index)
-        //             .unwrap()
-        //             .first_mut()
-        //             .unwrap();
-        //         if let Some(existing_value) = neighbor.memory_usage {
-        //             if existing_value != memory as usize {
-        //                 inconsistent_memory_usage = true;
-        //                 break;
-        //             }
-        //         }
-        //         neighbor.memory_usage = Some(memory as usize);
-        //     }
-        //     if inconsistent_memory_usage {
-        //         break;
-        //     }
-        // }
-
-        // if inconsistent_memory_usage {
-        //     for block in grafo.grafo.node_weights_mut() {
-        //         for line in block{
-        //             line.memory_usage = None;
-        //             line.liberation_address = None;
-        //         }
-        //     }
-        // }
+                'outer: while let Some(visited) = dfs.next(&grafo.grafo) {
+                    let weight = grafo.grafo.node_weight(visited).unwrap();
+                    for line in if visited == node_inicio {
+                        aloc.address - weight[0].address + 1
+                    } else {
+                        0
+                    }..weight.len()
+                    {
+                        if weight[line].memory_usage == aloc.memory_usage {
+                            grafo
+                                .instructions_mut()
+                                .find(|i| i.address == aloc.address)
+                                .unwrap()
+                                .liberation_address = Some(weight[line].address);
+                            break 'outer;
+                        }
+                    }
+                }
+            }
+        }
 
         grafo
     }
@@ -675,7 +646,15 @@ impl CodeGraph {
         })
     }
 
-    pub fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
+    fn instruction_mut(&mut self, addr: usize) -> Option<&mut InstructionAndMetadata>{
+        self
+            .grafo
+            .node_weights_mut()
+            .flat_map(|node_instructions| node_instructions.iter_mut())
+            .find(|f|f.address == addr)
+    }
+
+    fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
         // Collect all instructions from all nodes
         let mut instructions: Vec<_> = self
             .grafo
@@ -690,7 +669,7 @@ impl CodeGraph {
         instructions.into_iter()
     }
 
-    pub fn remove_instruction(addr: usize) {}
+    //pub fn remove_instruction(addr: usize) {}
 
     pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
         if let Some(parent) = filename.parent() {
@@ -706,11 +685,19 @@ impl CodeGraph {
                 .iter()
                 .map(|linha| {
                     format!(
-                        "{}: {} - {}",
+                        "{}: {}{}",
                         linha.address,
                         linha.instruction,
                         if let Some(memory_usage) = linha.memory_usage {
-                            memory_usage.to_string()
+                            format!(
+                                " [m: {}{}]",
+                                memory_usage,
+                                if let Some(liberation_address) = linha.liberation_address{
+                                    format!(" | L: {}", liberation_address)
+                                }else {
+                                    "".to_string()
+                                }
+                            )
                         } else {
                             "".to_string()
                         }
