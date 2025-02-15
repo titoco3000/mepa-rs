@@ -679,6 +679,17 @@ impl CodeGraph {
                     if line.address > addr {
                         line.address -= 1; // Subtract 1 from addresses greater than `addr`
                     }
+                    match &mut line.instruction {
+                        Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label)=>{
+                            if let Label::Literal(n) = label{
+                                if *n > addr {
+                                    // println!("Mudando {} para {}",*n, *n-1);
+                                    *label = Label::Literal(*n-1);
+                                }
+                            }
+                        },
+                        _=>{}
+                    }
                 }
             }
         }
