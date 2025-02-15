@@ -1,3 +1,11 @@
 Para o mapeamento de variaveis, tive que impor algumas regras que não eram contempladas em MEPA:
-1. Cada alocação com AMEM deve possuir uma unica liberação DMEM correspondente, de mesmo tamanho
-2. Essa liberação deve ser atingida determinísticamente (em todos os casos possíveis)
+1. Para cada alocação (AMEM, CRCT, etc), deve haver uma unica liberação atingida deterministicamente
+
+## A Fazer
+
+- implementar remove_instruction em grafo
+- implementar otimimização de pulos no grafo
+- implementar remoção de código morto no grafo
+- Mapear usos de bloco de memória
+    - usos
+    - atribuições

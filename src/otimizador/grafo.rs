@@ -395,7 +395,7 @@ impl CodeGraph {
                     //         let next_block = grafo
                     //             .locate_address(linha.address + 1)
                     //             .expect("Address not found in groupings");
-
+                    //
                     //         // encontra o retorno RTPR correspondente e adiciona uma transicao dele para a proxima instrucao
                     //         let return_addr = code
                     //             .iter()
