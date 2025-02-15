@@ -1,8 +1,9 @@
 use crate::mepa::code::MepaCode;
-use crate::mepa::instruction::{self, Instruction};
+use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
+use petgraph::visit::EdgeRef;
 use petgraph::{visit::Dfs, Graph};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -531,17 +532,16 @@ impl CodeGraph {
                         _ => 0,
                     };
                     let memory_delta = memory - last_memory;
-                    if memory_delta>0{
+                    if memory_delta > 0 {
                         alocation_stack.push((lines[line].address, memory));
-                    }
-                    else if memory_delta<0{
+                    } else if memory_delta < 0 {
                         // for each item on the stack, from last to first
                         while let Some(&top) = alocation_stack.last() {
                             // if it is greater or equal than memory, pop
                             if top.1 >= memory {
                                 alocation_stack.pop();
                                 alocation_map.push((top.0, lines[line].address));
-                            } 
+                            }
                             // else, stop
                             else {
                                 break;
@@ -575,8 +575,8 @@ impl CodeGraph {
                     break;
                 }
             }
-        
-            for (aloc, dealoc) in alocation_map{
+
+            for (aloc, dealoc) in alocation_map {
                 grafo.instruction_mut(aloc).unwrap().liberation_address = Some(dealoc);
             }
         }
@@ -646,12 +646,11 @@ impl CodeGraph {
         })
     }
 
-    fn instruction_mut(&mut self, addr: usize) -> Option<&mut InstructionAndMetadata>{
-        self
-            .grafo
+    fn instruction_mut(&mut self, addr: usize) -> Option<&mut InstructionAndMetadata> {
+        self.grafo
             .node_weights_mut()
             .flat_map(|node_instructions| node_instructions.iter_mut())
-            .find(|f|f.address == addr)
+            .find(|f| f.address == addr)
     }
 
     fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
@@ -669,7 +668,58 @@ impl CodeGraph {
         instructions.into_iter()
     }
 
-    //pub fn remove_instruction(addr: usize) {}
+    pub fn remove_instruction(&mut self, addr: usize) {
+        let indexes: Vec<NodeIndex> = self.grafo.node_indices().collect();
+
+        // First, adjust line addresses and remove lines equal to addr
+        for node_index in indexes {
+            if let Some(lines) = self.grafo.node_weight_mut(node_index) {
+                lines.retain(|line| line.address != addr); // Remove lines with addr equal to `addr`
+                for line in lines.iter_mut() {
+                    if line.address > addr {
+                        line.address -= 1; // Subtract 1 from addresses greater than `addr`
+                    }
+                }
+            }
+        }
+
+        // Second, handle empty nodes
+        let empty_nodes: Vec<NodeIndex> = self
+            .grafo
+            .node_indices()
+            .filter(|&node_index| {
+                if let Some(lines) = self.grafo.node_weight(node_index) {
+                    lines.is_empty() // Check if the node is empty
+                } else {
+                    false
+                }
+            })
+            .collect();
+
+        for empty_node in empty_nodes {
+            let neighbors:Vec<NodeIndex> = self.grafo.neighbors(empty_node).collect();
+            if neighbors.len()>1{
+                panic!("Como um node vazio pode apontar para mais de um vizinho?");
+            }
+            else{
+                // Find the node that the empty node points to
+                if let Some(target) = neighbors.into_iter().next() {
+                    let edges_to_redirect: Vec<_> = self
+                        .grafo
+                        .edges_directed(empty_node, petgraph::Direction::Incoming)
+                        .map(|edge| edge.source())
+                        .collect();
+    
+                    for source in edges_to_redirect {
+                        self.grafo.add_edge(source, target, ());
+                    }
+                }
+            }
+
+            // Remove the empty node from the graph
+            self.grafo.remove_node(empty_node);
+        }
+    }
 
     pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
         if let Some(parent) = filename.parent() {
@@ -692,9 +742,9 @@ impl CodeGraph {
                             format!(
                                 " [m: {}{}]",
                                 memory_usage,
-                                if let Some(liberation_address) = linha.liberation_address{
+                                if let Some(liberation_address) = linha.liberation_address {
                                     format!(" | L: {}", liberation_address)
-                                }else {
+                                } else {
                                     "".to_string()
                                 }
                             )
