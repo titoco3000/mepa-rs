@@ -276,24 +276,25 @@ pub fn graph_to_file_with_memory_usage(
 // }
 
 #[derive(Debug, Clone)]
-struct InstructionAndMetadata {
-    address: usize,
-    instruction: Instruction,
-    memory_usage: Option<usize>,
-    memory_delta: i32,
-    liberation_address: Option<usize>,
+pub struct InstructionAndMetadata {
+    pub address: usize,
+    pub instruction: Instruction,
+    pub memory_usage: Option<usize>,
+    pub memory_delta: i32,
+    pub liberation_address: Option<usize>,
 }
 
-struct FuncMetadata {
-    addr_inicio: usize,
-    addr_retorno: usize,
-    acesso: usize, //maximo de memoria acessado externo
-    args: usize,
+pub struct FuncMetadata {
+    pub addr_inicio: usize,
+    pub addr_retorno: usize,
+    pub acesso: usize, //maximo de memoria acessado externo
+    pub args: usize,
+    pub usos: Vec<usize>,
 }
 
 pub struct CodeGraph {
-    grafo: Graph<Vec<InstructionAndMetadata>, ()>,
-    funcoes: Vec<FuncMetadata>,
+    pub grafo: Graph<Vec<InstructionAndMetadata>, ()>,
+    pub funcoes: Vec<FuncMetadata>,
 }
 
 impl CodeGraph {
@@ -437,8 +438,6 @@ impl CodeGraph {
 
         grafo.grafo.extend_with_edges(&arestas);
 
-        // mapeia o uso de memoria
-
         //localiza todas as funcoes (inicio e fim)
         grafo.funcoes = {
             let mut addr_inicio = 0;
@@ -454,132 +453,27 @@ impl CodeGraph {
                         addr_retorno: instruction.address,
                         acesso: 0,
                         args: args as usize,
+                        usos: Vec::new(),
                     }),
                     _ => None,
                 })
                 .collect()
         };
 
+        // mapeia o uso de memoria
+
         // lista as raizes: inicios de funcao e inicio do programa
-        let raizes: Vec<NodeIndex> = grafo
+        let raizes: Vec<usize> = grafo
             .funcoes
             .iter()
-            .map(|func| grafo.locate_address(func.addr_inicio).unwrap().clone())
-            .chain(std::iter::once(0.into()))
+            .map(|func| func.addr_inicio)
+            .chain(std::iter::once(0))
             .collect();
 
-        let mut inconsistent_memory_usage = false;
-
-        // mapeia total de memoria alocada em cada instrucao e diferença da ultima
-        for raiz in raizes {
-            // primeira instrucao usa 0
-            grafo
-                .grafo
-                .node_weight_mut(raiz)
-                .unwrap()
-                .first_mut()
-                .unwrap()
-                .memory_usage = Some(0);
-
-            let mut dfs = Dfs::new(&grafo.grafo, raiz);
-
-            let mut alocation_stack = Vec::new();
-            let mut alocation_map = Vec::new();
-
-            while let Some(visited) = dfs.next(&grafo.grafo) {
-                println!("Visitando o node {:?}", visited);
-                let neighbors: Vec<NodeIndex> =
-                    grafo.grafo.neighbors(visited).map(|n| n.clone()).collect();
-                let lines = grafo.grafo.node_weight_mut(visited).unwrap();
-                let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-                let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-                for line in 0..lines.len() {
-                    memory += match &lines[line].instruction {
-                        Instruction::CRCT(_)
-                        | Instruction::CRVL(_, _)
-                        | Instruction::CREN(_, _)
-                        | Instruction::CRVI(_, _)
-                        | Instruction::LEIT
-                        | Instruction::ENPR(_) => 1,
-                        Instruction::ARMZ(_, _)
-                        | Instruction::ARMI(_, _)
-                        | Instruction::SOMA
-                        | Instruction::SUBT
-                        | Instruction::MULT
-                        | Instruction::DIVI
-                        | Instruction::CONJ
-                        | Instruction::DISJ
-                        | Instruction::CMME
-                        | Instruction::CMMA
-                        | Instruction::CMIG
-                        | Instruction::CMDG
-                        | Instruction::CMEG
-                        | Instruction::CMAG
-                        | Instruction::DSVF(_)
-                        | Instruction::IMPR => -1,
-                        Instruction::AMEM(n) => *n,
-                        Instruction::DMEM(n) => -n,
-                        Instruction::RTPR(_, n) => -n - 2,
-                        Instruction::CHPR(k) => {
-                            //locate the function
-                            -(grafo
-                                .funcoes
-                                .iter()
-                                .find(|f| f.addr_inicio == k.unwrap())
-                                .unwrap()
-                                .args as i32)
-                        }
-                        _ => 0,
-                    };
-                    let memory_delta = memory - last_memory;
-                    if memory_delta > 0 {
-                        alocation_stack.push((lines[line].address, memory));
-                    } else if memory_delta < 0 {
-                        // for each item on the stack, from last to first
-                        while let Some(&top) = alocation_stack.last() {
-                            // if it is greater or equal than memory, pop
-                            if top.1 >= memory {
-                                alocation_stack.pop();
-                                alocation_map.push((top.0, lines[line].address));
-                            }
-                            // else, stop
-                            else {
-                                break;
-                            }
-                        }
-                    }
-                    lines[line].memory_delta = memory_delta;
-                    last_memory = memory;
-                    // assign to the next line, if available
-                    if line + 1 < lines.len() {
-                        lines[line + 1].memory_usage = Some(memory as usize);
-                    }
-                }
-                // Propagate to neighbors
-                for neighbor_index in neighbors.into_iter() {
-                    let neighbor = grafo
-                        .grafo
-                        .node_weight_mut(neighbor_index)
-                        .unwrap()
-                        .first_mut()
-                        .unwrap();
-                    if let Some(existing_value) = neighbor.memory_usage {
-                        if existing_value != memory as usize {
-                            inconsistent_memory_usage = true;
-                            break;
-                        }
-                    }
-                    neighbor.memory_usage = Some(memory as usize);
-                }
-                if inconsistent_memory_usage {
-                    break;
-                }
-            }
-
-            for (aloc, dealoc) in alocation_map {
-                grafo.instruction_mut(aloc).unwrap().liberation_address = Some(dealoc);
-            }
-        }
+        let inconsistent_memory_usage = raizes
+            .iter()
+            .map(|raiz| !grafo.mapear_memoria_a_partir_de(*raiz, 0))
+            .any(|r| r);
 
         if inconsistent_memory_usage {
             for line in grafo.instructions_mut() {
@@ -623,37 +517,154 @@ impl CodeGraph {
             }
         }
 
+        // procura usos de funcoes
+        let mut updates = Vec::new();
+        for line in grafo.instructions_unordered() {
+            if let Instruction::CHPR(label) = &line.instruction {
+                updates.push((label.unwrap(), line.address));
+            }
+        }
+        for (label, address) in updates {
+            for f in &mut grafo.funcoes {
+                if f.addr_inicio == label {
+                    f.usos.push(address);
+                }
+            }
+        }
+
         grafo
     }
+    // retorna se teve sucesso ou não
+    pub fn mapear_memoria_a_partir_de(&mut self, addr: usize, initial_value: usize) -> bool {
+        let raiz = self.locate_address(addr).unwrap();
 
-    fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
+        // primeira instrucao usa 0
+        for line in self.grafo.node_weight_mut(raiz).unwrap() {
+            if line.address == addr {
+                line.memory_usage = Some(initial_value);
+                line.memory_delta = 0;
+            }
+        }
+
+        let mut dfs = Dfs::new(&self.grafo, raiz);
+
+        let mut alocation_stack = Vec::new();
+        let mut alocation_map = Vec::new();
+
+        while let Some(visited) = dfs.next(&self.grafo) {
+            let neighbors: Vec<NodeIndex> =
+                self.grafo.neighbors(visited).map(|n| n.clone()).collect();
+            let lines = if visited == raiz {
+                let lines = self.grafo.node_weight_mut(visited).unwrap();
+                let first_addr = lines[0].address;
+                &mut lines[addr - first_addr..]
+            } else {
+                self.grafo.node_weight_mut(visited).unwrap()
+            };
+            let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+            let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+            for line in 0..lines.len() {
+                memory += match &lines[line].instruction {
+                    Instruction::CRCT(_)
+                    | Instruction::CRVL(_, _)
+                    | Instruction::CREN(_, _)
+                    | Instruction::CRVI(_, _)
+                    | Instruction::LEIT
+                    | Instruction::ENPR(_) => 1,
+                    Instruction::ARMZ(_, _)
+                    | Instruction::ARMI(_, _)
+                    | Instruction::SOMA
+                    | Instruction::SUBT
+                    | Instruction::MULT
+                    | Instruction::DIVI
+                    | Instruction::CONJ
+                    | Instruction::DISJ
+                    | Instruction::CMME
+                    | Instruction::CMMA
+                    | Instruction::CMIG
+                    | Instruction::CMDG
+                    | Instruction::CMEG
+                    | Instruction::CMAG
+                    | Instruction::DSVF(_)
+                    | Instruction::IMPR => -1,
+                    Instruction::AMEM(n) => *n,
+                    Instruction::DMEM(n) => -n,
+                    Instruction::RTPR(_, n) => -n - 2,
+                    Instruction::CHPR(k) => {
+                        //locate the function
+                        -(self
+                            .funcoes
+                            .iter()
+                            .find(|f| f.addr_inicio == k.unwrap())
+                            .unwrap()
+                            .args as i32)
+                    }
+                    _ => 0,
+                };
+                let memory_delta = memory - last_memory;
+                if memory_delta > 0 {
+                    alocation_stack.push((lines[line].address, memory));
+                } else if memory_delta < 0 {
+                    // for each item on the stack, from last to first
+                    while let Some(&top) = alocation_stack.last() {
+                        // if it is greater or equal than memory, pop
+                        if top.1 >= memory {
+                            alocation_stack.pop();
+                            alocation_map.push((top.0, lines[line].address));
+                        }
+                        // else, stop
+                        else {
+                            break;
+                        }
+                    }
+                }
+                lines[line].memory_delta = memory_delta;
+                last_memory = memory;
+                // assign to the next line, if available
+                if line + 1 < lines.len() {
+                    lines[line + 1].memory_usage = Some(memory as usize);
+                }
+            }
+            // Propagate to neighbors
+            for neighbor_index in neighbors.into_iter() {
+                let neighbor = self
+                    .grafo
+                    .node_weight_mut(neighbor_index)
+                    .unwrap()
+                    .first_mut()
+                    .unwrap();
+                if let Some(existing_value) = neighbor.memory_usage {
+                    if existing_value != memory as usize {
+                        return false;
+                    }
+                }
+                neighbor.memory_usage = Some(memory as usize);
+            }
+        }
+
+        for (aloc, dealoc) in alocation_map {
+            self.instruction_mut(aloc).unwrap().liberation_address = Some(dealoc);
+        }
+        true
+    }
+    pub fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
         self.grafo.node_indices().find(|&output_index| {
-            let (start, end) = (
-                self.grafo
-                    .node_weight(output_index)
-                    .unwrap()
-                    .first()
-                    .unwrap()
-                    .address,
-                self.grafo
-                    .node_weight(output_index)
-                    .unwrap()
-                    .last()
-                    .unwrap()
-                    .address,
-            );
-            addr >= start && addr <= end
+            if let Some(lines) = self.grafo.node_weight(output_index) {
+                lines.iter().any(|line|line.address==addr)
+            } else {
+                false
+            }
         })
     }
 
-    fn instruction_mut(&mut self, addr: usize) -> Option<&mut InstructionAndMetadata> {
+    pub fn instruction_mut(&mut self, addr: usize) -> Option<&mut InstructionAndMetadata> {
         self.grafo
             .node_weights_mut()
             .flat_map(|node_instructions| node_instructions.iter_mut())
             .find(|f| f.address == addr)
     }
 
-    fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
+    pub fn instructions_mut(&mut self) -> impl Iterator<Item = &mut InstructionAndMetadata> {
         // Collect all instructions from all nodes
         let mut instructions: Vec<_> = self
             .grafo
@@ -668,51 +679,120 @@ impl CodeGraph {
         instructions.into_iter()
     }
 
-    pub fn remove_instruction(&mut self, addr: usize) {
-        let indexes: Vec<NodeIndex> = self.grafo.node_indices().collect();
+    pub fn instructions_unordered(&self) -> impl Iterator<Item = &InstructionAndMetadata> {
+        self.grafo
+            .node_weights()
+            .flat_map(|node_instructions| node_instructions.iter())
+    }
 
-        // First, adjust line addresses and remove lines equal to addr
-        for node_index in indexes {
-            if let Some(lines) = self.grafo.node_weight_mut(node_index) {
-                lines.retain(|line| line.address != addr); // Remove lines with addr equal to `addr`
-                for line in lines.iter_mut() {
-                    if line.address > addr {
-                        line.address -= 1; // Subtract 1 from addresses greater than `addr`
-                    }
-                    match &mut line.instruction {
-                        Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label)=>{
-                            if let Label::Literal(n) = label{
-                                if *n > addr {
-                                    // println!("Mudando {} para {}",*n, *n-1);
-                                    *label = Label::Literal(*n-1);
-                                }
-                            }
-                        },
-                        _=>{}
-                    }
-                }
+    //falta incluir mudança de contagem de chamadas de funcao
+    pub fn remove_instruction(&mut self, addr: usize) {
+        self.remove_instruction_controlled(addr, true);
+    }
+
+    pub fn remove_instruction_controlled(&mut self, addr: usize, remap: bool) {
+        if remap {
+            if let Some(memory_usage_before) = self.instruction_mut(addr).unwrap().memory_usage {
+                //remapeia instrucoes atingiveis por esta, considerando que ela não vai mais afetar a execucao
+                self.mapear_memoria_a_partir_de(addr + 1, memory_usage_before);
             }
         }
 
-        // Second, handle empty nodes
+        let node = self.locate_address(addr).unwrap();
+        let line = {
+            let lines = self
+                .grafo
+                .node_weight_mut(self.locate_address(addr).unwrap())
+                .unwrap();
+            let i = lines.iter().position(|l| l.address == addr).unwrap();
+            //remove a linha
+            lines.remove(i)
+        };
+
+        //aponta qqr desvio q apontaria para ela para a proxima
+        for line in self.instructions_mut() {
+            match &mut line.instruction {
+                Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label) => {
+                    if label.unwrap() == addr {
+                        *label = Label::Literal(addr + 1);
+                    }
+                }
+                _ => {}
+            }
+        }        
+
+        // transformacoes especificas
+        match line.instruction {
+            Instruction::CHPR(label) => {
+                // remove uso da funcao de funcoes
+                if let Some(index) = self
+                    .funcoes
+                    .iter()
+                    .position(|f| f.addr_inicio == label.unwrap())
+                {
+                    if let Some(f) = self.funcoes.get_mut(index) {
+                        if let Some(i) = f.usos.iter().position(|n| *n == addr) {
+                            f.usos.swap_remove(i);
+                        }
+                    }
+                }
+            }
+            Instruction::DSVS(label) => {
+                // remove pulo associado
+                let target = self.locate_address(label.unwrap()).unwrap();
+                if let Some(e) = self
+                    .grafo
+                    .edges_connecting(node, target)
+                    .map(|e| e.id())
+                    .next()
+                {
+                    self.grafo.remove_edge(e);
+                }
+                // adiciona pulo para proximo endereço que ainda existir
+                for i in 1..self.len() {
+                    if let Some(target) = self.locate_address(addr + i) {
+                        self.grafo.add_edge(node, target, ());
+                        break;
+                    }
+                }
+            }
+            Instruction::DSVF(label) => {
+                // remove pulo associado
+                let target = self.locate_address(label.unwrap()).unwrap();
+                if let Some(e) = self
+                    .grafo
+                    .edges_connecting(node, target)
+                    .map(|e| e.id())
+                    .next()
+                {
+                    self.grafo.remove_edge(e);
+                }
+            }
+            Instruction::ENPR(_) => {
+                // remove funcao de funcoes
+                if let Some(i) = self
+                    .funcoes
+                    .iter()
+                    .position(|f| f.addr_inicio == line.address)
+                {
+                    self.funcoes.swap_remove(i);
+                }
+            }
+            _ => (),
+        }
+
+        // Lida com nodes vazios
         let empty_nodes: Vec<NodeIndex> = self
             .grafo
             .node_indices()
-            .filter(|&node_index| {
-                if let Some(lines) = self.grafo.node_weight(node_index) {
-                    lines.is_empty() // Check if the node is empty
-                } else {
-                    false
-                }
-            })
+            .filter(|&node_index| self.grafo.node_weight(node_index).unwrap().is_empty())
             .collect();
 
         for empty_node in empty_nodes {
-            let neighbors:Vec<NodeIndex> = self.grafo.neighbors(empty_node).collect();
-            if neighbors.len()>1{
+            let neighbors: Vec<NodeIndex> = self.grafo.neighbors(empty_node).collect();
+            if neighbors.len() > 1 {
                 panic!("Como um node vazio pode apontar para mais de um vizinho?");
-            }
-            else{
+            } else {
                 // Find the node that the empty node points to
                 if let Some(target) = neighbors.into_iter().next() {
                     let edges_to_redirect: Vec<_> = self
@@ -720,7 +800,7 @@ impl CodeGraph {
                         .edges_directed(empty_node, petgraph::Direction::Incoming)
                         .map(|edge| edge.source())
                         .collect();
-    
+
                     for source in edges_to_redirect {
                         self.grafo.add_edge(source, target, ());
                     }
@@ -730,6 +810,65 @@ impl CodeGraph {
             // Remove the empty node from the graph
             self.grafo.remove_node(empty_node);
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.grafo.node_weights().map(|lines| lines.len()).sum()
+    }
+
+    pub fn remove_node(&mut self, inicio: NodeIndex) {
+        // verifica se a primeira instrucao é ENPR
+        let removidos: Vec<usize> = self
+            .grafo
+            .node_weight(inicio)
+            .unwrap()
+            .iter()
+            .map(|line| line.address)
+            .collect();
+
+        for r in removidos {
+            self.remove_instruction_controlled(r, false);
+        }
+    }
+
+    pub fn to_mepa_code(self) -> MepaCode {
+        // Collect all instructions from all nodes into a single Vec
+        let mut instructions: Vec<InstructionAndMetadata> = self
+            .grafo.into_nodes_edges().0.into_iter().flat_map(|node| node.weight.into_iter())
+            .collect();
+    
+        // Sort instructions by address
+        instructions.sort_by_key(|instr| instr.address);
+    
+        // First, collect the positions of the labels in an immutable context
+        let label_positions: Vec<(usize, usize)> = instructions.iter()
+            .enumerate()
+            .filter_map(|(i, instr)| {
+                match &instr.instruction {
+                    Instruction::DSVS(label) |
+                    Instruction::DSVF(label) |
+                    Instruction::CHPR(label) => Some((i, label.unwrap())),
+                    _ => None,
+                }
+            })
+            .map(|(i, label)| (i, instructions.iter().position(|l| l.address == label).unwrap()))
+            .map(|(i, pos)| (i, pos))
+            .collect();
+    
+        // Then, update the labels in a mutable context
+        for (i, pos) in label_positions {
+            match &mut instructions[i].instruction {
+                Instruction::DSVS(label) |
+                Instruction::DSVF(label) |
+                Instruction::CHPR(label) => {
+                    *label = Label::Literal(pos);
+                }
+                _ => (),
+            }
+        }
+    
+        // Return the sorted Vec
+        MepaCode::from(instructions.into_iter().map(|line| line.instruction))
     }
 
     pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {

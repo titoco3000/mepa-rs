@@ -3,9 +3,7 @@ Para o mapeamento de variaveis, tive que impor algumas regras que não eram cont
 
 ## A Fazer
 
-- implementar remove_instruction em grafo - ok
-- implementar otimimização de pulos no grafo 
-- implementar remoção de código morto no grafo
+- testar direito
 - Mapear usos de bloco de memória
     - usos
     - atribuições

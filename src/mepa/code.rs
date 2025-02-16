@@ -22,6 +22,20 @@ impl DerefMut for MepaCode {
     }
 }
 
+impl<T> From<T> for MepaCode
+where
+    T: IntoIterator<Item = Instruction>,
+{
+    fn from(instructions: T) -> Self {
+        // Map each instruction to a tuple with `None` as the label
+        let instructions_with_labels = instructions.into_iter()
+            .map(|instruction| (None, instruction))
+            .collect();
+
+        MepaCode(instructions_with_labels)
+    }
+}
+
 impl MepaCode {
     pub fn with_capacity(capacity: usize)->MepaCode{
         MepaCode(Vec::with_capacity(capacity))
