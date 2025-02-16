@@ -137,7 +137,6 @@ impl Compiler {
     }
     fn declarations(&mut self) -> Result<usize, CompileError> {
         let mut v = Vec::with_capacity(8);
-        println!("Em declaracoes de {:?}",self.current_function);
         while is_token!(self.tokens.next(), Token::Int) || is_token!(self.tokens.next(), Token::Ptr)
         {
             v.append(&mut self.declaration()?);
