@@ -12,276 +12,18 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::usize;
 
-pub fn map_code_to_graph(code: &MepaCode) -> Graph<(usize, usize), ()> {
-    let mut grafo = Graph::new();
-
-    let mut lideres: Vec<usize> = code
-        .iter()
-        .enumerate()
-        .flat_map(|(i, (_, code))| {
-            if i == 0 {
-                // The first index is always a leader
-                Some(vec![0])
-            } else {
-                match code {
-                    Instruction::DSVF(label)
-                    | Instruction::DSVS(label)
-                    | Instruction::CHPR(label) => {
-                        if let Label::Literal(addr) = label {
-                            Some(vec![i + 1, *addr]) // Add the next instruction and jump address
-                        } else {
-                            panic!("Should never reach here");
-                        }
-                    }
-                    Instruction::RTPR(_, _) => Some(vec![i + 1]), // Add the next instruction
-                    _ => None,
-                }
-            }
-        })
-        .flatten()
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-
-    lideres.sort_unstable();
-
-    let vertices: Vec<NodeIndex> = lideres
-        .iter()
-        .zip(lideres.iter().skip(1).chain(std::iter::once(&code.len())))
-        .map(|(&start, &end)| grafo.add_node((start, end)))
-        .collect();
-
-    let mut arestas: Vec<(NodeIndex, NodeIndex)> = Vec::with_capacity(code.len());
-    for v in &vertices {
-        let linhas = grafo.node_weight(*v).unwrap();
-        for linha in linhas.0..linhas.1 {
-            match &code[linha].1 {
-                Instruction::DSVS(label) => {
-                    if let Label::Literal(jmp_addr) = label {
-                        let target_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= *jmp_addr && *jmp_addr < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        arestas.push((*v, target_block));
-                    } else {
-                        panic!("não removeu labels simbolicos")
-                    }
-                }
-                Instruction::DSVF(label) => {
-                    if let Label::Literal(jmp_addr) = label {
-                        let jmp_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= *jmp_addr && *jmp_addr < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        let next_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= linhas.1 && linhas.1 < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        arestas.push((*v, jmp_block));
-                        arestas.push((*v, next_block));
-                    } else {
-                        panic!("não removeu labels simbolicos")
-                    }
-                }
-                Instruction::CHPR(label) => {
-                    if let Label::Literal(jmp_addr) = label {
-                        let procedure_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= *jmp_addr && *jmp_addr < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        let return_block = code
-                            .iter()
-                            .enumerate()
-                            .skip(*jmp_addr)
-                            .find_map(|(ret_addr, (_, inst))| {
-                                if let Instruction::RTPR(_, _) = inst {
-                                    Some(
-                                        vertices
-                                            .iter()
-                                            .find(|&&output_index| {
-                                                let &(start, end) =
-                                                    grafo.node_weight(output_index).unwrap();
-                                                start <= ret_addr && ret_addr < end
-                                            })
-                                            .expect("Address not found in groupings")
-                                            .clone(),
-                                    )
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap();
-                        let next_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= linhas.1 && linhas.1 < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        arestas.push((*v, procedure_block));
-                        arestas.push((return_block, next_block));
-                    } else {
-                        panic!("não removeu labels simbolicos")
-                    }
-                }
-                Instruction::PARA | Instruction::RTPR(_, _) => (),
-                _ => {
-                    // se é a ultima linha do bloco e não é nenhum pulo, então é um pulo para o próximo
-                    if linha + 1 == linhas.1 {
-                        let next_block = vertices
-                            .iter()
-                            .find(|&&output_index| {
-                                let &(start, end) = grafo.node_weight(output_index).unwrap();
-                                start <= linhas.1 && linhas.1 < end
-                            })
-                            .expect("Address not found in groupings")
-                            .clone();
-                        arestas.push((*v, next_block));
-                    }
-                }
-            }
-        }
-    }
-    grafo.extend_with_edges(&arestas);
-
-    grafo
+#[derive(Debug, Clone)]
+pub struct Allocation{
+    pub amount: usize,
+    pub liberation_address: usize
 }
-
-pub fn graph_to_file(
-    filename: &PathBuf,
-    code: &MepaCode,
-    graph: &Graph<(usize, usize), ()>,
-) -> io::Result<()> {
-    if let Some(parent) = filename.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Create or open the file
-    let file = File::create(filename)?;
-
-    let mut graph_with_code: Graph<String, ()> = Graph::new();
-    for &(inicio, fim) in graph.node_weights() {
-        let linhas_de_mepa: Vec<String> = (inicio..fim)
-            .map(|linha| format!("{}: {}", linha, code[linha].1))
-            .collect();
-        let s = linhas_de_mepa.join("\n");
-        graph_with_code.add_node(s);
-    }
-
-    let arestas: Vec<(NodeIndex, NodeIndex)> = graph
-        .raw_edges()
-        .iter()
-        .map(|edge| (edge.source(), edge.target()))
-        .collect();
-
-    graph_with_code.extend_with_edges(&arestas);
-
-    let raw_dot = format!(
-        "{:?}",
-        Dot::with_config(&graph_with_code, &[Config::EdgeNoLabel])
-    );
-
-    let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
-
-    // Write the processed string to the file
-    write!(&file, "{}", processed_dot)
-}
-
-pub fn graph_to_file_with_memory_usage(
-    filename: &PathBuf,
-    code: &MepaCode,
-    graph: &Graph<(usize, usize), ()>,
-    memory_graph: &Graph<Vec<usize>, ()>,
-) -> io::Result<()> {
-    if let Some(parent) = filename.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Create or open the file
-    let file = File::create(filename)?;
-
-    let mut graph_with_code: Graph<String, ()> = Graph::new();
-    for (node_index, &(inicio, fim)) in graph.node_weights().enumerate() {
-        let memory_usage = memory_graph
-            .node_weight(NodeIndex::new(node_index))
-            .unwrap();
-
-        let linhas_de_mepa: Vec<String> = (inicio..fim)
-            .map(|linha| {
-                format!(
-                    "{}: {} - {}",
-                    linha,
-                    code[linha].1,
-                    memory_usage[linha - inicio]
-                )
-            })
-            .collect();
-        let s = linhas_de_mepa.join("\n");
-        graph_with_code.add_node(s);
-    }
-
-    let arestas: Vec<(NodeIndex, NodeIndex)> = graph
-        .raw_edges()
-        .iter()
-        .map(|edge| (edge.source(), edge.target()))
-        .collect();
-
-    graph_with_code.extend_with_edges(&arestas);
-
-    let raw_dot = format!(
-        "{:?}",
-        Dot::with_config(&graph_with_code, &[Config::EdgeNoLabel])
-    );
-
-    let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
-
-    // Write the processed string to the file
-    write!(&file, "{}", processed_dot)
-}
-
-// pub fn raw_graph_to_file<T>(filename: &PathBuf, graph: &Graph<T, ()>) -> io::Result<()>
-// where
-//     T: Debug,
-// {
-//     if let Some(parent) = filename.parent() {
-//         fs::create_dir_all(parent)?;
-//     }
-
-//     // Create or open the file
-//     let file = File::create(filename)?;
-
-//     let raw_dot = format!("{:?}", Dot::with_config(&graph, &[Config::EdgeNoLabel]));
-
-//     let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
-
-//     // Write the processed string to the file
-//     write!(&file, "{}", processed_dot)
-// }
 
 #[derive(Debug, Clone)]
 pub struct InstructionAndMetadata {
     pub address: usize,
     pub instruction: Instruction,
-    pub memory_usage: Option<usize>,
-    pub memory_delta: i32,
-    pub liberation_address: Option<usize>,
+    pub initial_memory_usage: Option<usize>,
+    pub allocation: Option<Allocation>
 }
 
 pub struct FuncMetadata {
@@ -295,6 +37,7 @@ pub struct FuncMetadata {
 pub struct CodeGraph {
     pub grafo: Graph<Vec<InstructionAndMetadata>, ()>,
     pub funcoes: Vec<FuncMetadata>,
+    pub memoria_consistente: bool
 }
 
 impl CodeGraph {
@@ -305,6 +48,7 @@ impl CodeGraph {
         let mut grafo = CodeGraph {
             grafo: Graph::new(),
             funcoes: Vec::new(),
+            memoria_consistente: false
         };
 
         let mut lideres: Vec<usize> = code
@@ -346,9 +90,8 @@ impl CodeGraph {
                     .map(|addr| InstructionAndMetadata {
                         address: addr,
                         instruction: code[addr].1.clone(),
-                        memory_usage: None,
-                        memory_delta: 0,
-                        liberation_address: None,
+                        initial_memory_usage: None,
+                        allocation:None
                     })
                     .collect();
                 grafo.grafo.add_node(instructions)
@@ -460,63 +203,6 @@ impl CodeGraph {
                 .collect()
         };
 
-        // mapeia o uso de memoria
-
-        // lista as raizes: inicios de funcao e inicio do programa
-        let raizes: Vec<usize> = grafo
-            .funcoes
-            .iter()
-            .map(|func| func.addr_inicio)
-            .chain(std::iter::once(0))
-            .collect();
-
-        let inconsistent_memory_usage = raizes
-            .iter()
-            .map(|raiz| !grafo.mapear_memoria_a_partir_de(*raiz, 0))
-            .any(|r| r);
-
-        if inconsistent_memory_usage {
-            for line in grafo.instructions_mut() {
-                line.memory_usage = None;
-            }
-        } else {
-            let alocs: Vec<InstructionAndMetadata> = grafo
-                .instructions_mut()
-                .filter_map(|i| {
-                    if i.memory_delta > 0 {
-                        Some(i.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-
-            // para cada instrucao com delta positivo, encontrar aquela que retorna o valor para o original
-            for aloc in alocs {
-                let node_inicio = grafo.locate_address(aloc.address).unwrap();
-                let mut dfs = Dfs::new(&grafo.grafo, node_inicio);
-
-                'outer: while let Some(visited) = dfs.next(&grafo.grafo) {
-                    let weight = grafo.grafo.node_weight(visited).unwrap();
-                    for line in if visited == node_inicio {
-                        aloc.address - weight[0].address + 1
-                    } else {
-                        0
-                    }..weight.len()
-                    {
-                        if weight[line].memory_usage == aloc.memory_usage {
-                            grafo
-                                .instructions_mut()
-                                .find(|i| i.address == aloc.address)
-                                .unwrap()
-                                .liberation_address = Some(weight[line].address);
-                            break 'outer;
-                        }
-                    }
-                }
-            }
-        }
-
         // procura usos de funcoes
         let mut updates = Vec::new();
         for line in grafo.instructions_unordered() {
@@ -532,17 +218,74 @@ impl CodeGraph {
             }
         }
 
+        // lista as raizes (inicios de funcao e inicio do programa) e a memoria inicial de cada um
+        let bases_mapeamento: Vec<(usize, usize)> = grafo
+            .funcoes
+            .iter()
+            .map(|func| (func.addr_inicio, func.args+1)) // este +1 é para contar com a memoria alocada por CHPR
+            .chain(std::iter::once((0,0)))
+            .collect();
+        
+        println!("bases_mapeamento: {:?}",bases_mapeamento);
+        // mapeia o uso de memoria
+        grafo.memoria_consistente = bases_mapeamento
+            .iter()
+            .map(|raiz| {
+                let r = grafo.mapear_memoria_a_partir_de(raiz.0, raiz.1);
+                println!("Mapeada a memoria a partir de {}: {}",raiz.0, r);
+                r
+            })
+            .all(|r| r);
+
+        // if grafo.memoria_consistente{
+        //     let alocs: Vec<InstructionAndMetadata> = grafo
+        //         .instructions_mut()
+        //         .filter_map(|i| {
+        //             if i.memory_delta > 0 {
+        //                 Some(i.clone())
+        //             } else {
+        //                 None
+        //             }
+        //         })
+        //         .collect();
+
+        //     // para cada instrucao com delta positivo, encontrar aquela que retorna o valor para o original
+        //     for aloc in alocs {
+        //         let node_inicio = grafo.locate_address(aloc.address).unwrap();
+        //         let mut dfs = Dfs::new(&grafo.grafo, node_inicio);
+
+        //         'outer: while let Some(visited) = dfs.next(&grafo.grafo) {
+        //             let weight = grafo.grafo.node_weight(visited).unwrap();
+        //             for line in if visited == node_inicio {
+        //                 aloc.address - weight[0].address + 1
+        //             } else {
+        //                 0
+        //             }..weight.len()
+        //             {
+        //                 if weight[line].memory_usage == aloc.memory_usage {
+        //                     grafo
+        //                         .instructions_mut()
+        //                         .find(|i| i.address == aloc.address)
+        //                         .unwrap()
+        //                         .liberation_address = Some(weight[line].address);
+        //                     break 'outer;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }        
+
         grafo
     }
     // retorna se teve sucesso ou não
     pub fn mapear_memoria_a_partir_de(&mut self, addr: usize, initial_value: usize) -> bool {
         let raiz = self.locate_address(addr).unwrap();
 
-        // primeira instrucao usa 0
+        // valores da instrucao
         for line in self.grafo.node_weight_mut(raiz).unwrap() {
             if line.address == addr {
-                line.memory_usage = Some(initial_value);
-                line.memory_delta = 0;
+                line.initial_memory_usage = Some(initial_value);
+                line.allocation = None;
             }
         }
 
@@ -561,10 +304,11 @@ impl CodeGraph {
             } else {
                 self.grafo.node_weight_mut(visited).unwrap()
             };
-            let mut memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-            let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
-            for line in 0..lines.len() {
-                memory += match &lines[line].instruction {
+            let mut memory:usize = lines.first().unwrap().initial_memory_usage.unwrap();
+            // let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
+            for line_idx in 0..lines.len() {
+                println!("{:?}",lines[line_idx]);
+                let memory_delta = match &lines[line_idx].instruction {
                     Instruction::CRCT(_)
                     | Instruction::CRVL(_, _)
                     | Instruction::CREN(_, _)
@@ -601,16 +345,20 @@ impl CodeGraph {
                     }
                     _ => 0,
                 };
-                let memory_delta = memory - last_memory;
+                // verifica se memoria total não será negativa, caso que invalida mapeamento
+                if memory_delta < 0 && memory < (-memory_delta) as usize { 
+                    return false;
+                } 
+                memory = (memory as i32 + memory_delta) as usize;
                 if memory_delta > 0 {
-                    alocation_stack.push((lines[line].address, memory));
+                    alocation_stack.push((lines[line_idx].address, memory, memory_delta));
                 } else if memory_delta < 0 {
                     // for each item on the stack, from last to first
                     while let Some(&top) = alocation_stack.last() {
                         // if it is greater or equal than memory, pop
                         if top.1 >= memory {
                             alocation_stack.pop();
-                            alocation_map.push((top.0, lines[line].address));
+                            alocation_map.push((top.0, Allocation{amount:top.2 as usize,liberation_address:lines[line_idx].address}));
                         }
                         // else, stop
                         else {
@@ -618,11 +366,9 @@ impl CodeGraph {
                         }
                     }
                 }
-                lines[line].memory_delta = memory_delta;
-                last_memory = memory;
-                // assign to the next line, if available
-                if line + 1 < lines.len() {
-                    lines[line + 1].memory_usage = Some(memory as usize);
+                // se houver proximo (não for ultima passada do loop), adiciona memoria inicial ao proximo
+                if line_idx + 1 < lines.len() {
+                    lines[line_idx + 1].initial_memory_usage = Some(memory as usize);
                 }
             }
             // Propagate to neighbors
@@ -633,20 +379,22 @@ impl CodeGraph {
                     .unwrap()
                     .first_mut()
                     .unwrap();
-                if let Some(existing_value) = neighbor.memory_usage {
+                if let Some(existing_value) = neighbor.initial_memory_usage {
                     if existing_value != memory as usize {
+                        // falhou o mapeamento
                         return false;
                     }
                 }
-                neighbor.memory_usage = Some(memory as usize);
+                neighbor.initial_memory_usage = Some(memory as usize);
             }
         }
 
-        for (aloc, dealoc) in alocation_map {
-            self.instruction_mut(aloc).unwrap().liberation_address = Some(dealoc);
+        for (addr, aloc) in alocation_map {
+            self.instruction_mut(addr).unwrap().allocation = Some(aloc);
         }
         true
     }
+    
     pub fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
         self.grafo.node_indices().find(|&output_index| {
             if let Some(lines) = self.grafo.node_weight(output_index) {
@@ -691,8 +439,8 @@ impl CodeGraph {
     }
 
     pub fn remove_instruction_controlled(&mut self, addr: usize, remap: bool) {
-        if remap {
-            if let Some(memory_usage_before) = self.instruction_mut(addr).unwrap().memory_usage {
+        if remap && self.memoria_consistente{
+            if let Some(memory_usage_before) = self.instruction_mut(addr).unwrap().initial_memory_usage {
                 //remapeia instrucoes atingiveis por esta, considerando que ela não vai mais afetar a execucao
                 self.mapear_memoria_a_partir_de(addr + 1, memory_usage_before);
             }
@@ -884,24 +632,29 @@ impl CodeGraph {
             let linhas_de_mepa: Vec<String> = instructions
                 .iter()
                 .map(|linha| {
-                    format!(
-                        "{}: {}{}",
-                        linha.address,
-                        linha.instruction,
-                        if let Some(memory_usage) = linha.memory_usage {
-                            format!(
-                                " [m: {}{}]",
-                                memory_usage,
-                                if let Some(liberation_address) = linha.liberation_address {
-                                    format!(" | L: {}", liberation_address)
-                                } else {
-                                    "".to_string()
-                                }
-                            )
-                        } else {
-                            "".to_string()
-                        }
-                    )
+                    if self.memoria_consistente{
+                        format!(
+                            "[{}] {}: {}{}",
+                            linha.initial_memory_usage.unwrap(),
+                            linha.address,
+                            linha.instruction,
+                            if let Some(aloc) = &linha.allocation {
+                                format!(
+                                    " ({} | {})",
+                                    aloc.amount, aloc.liberation_address
+                                )
+                            } else {
+                                "".to_string()
+                            }
+                        )
+                    }
+                    else {
+                        format!(
+                            "{}: {}",
+                            linha.address,
+                            linha.instruction
+                        )
+                    }
                 })
                 .collect();
             let s = linhas_de_mepa.join("\n");

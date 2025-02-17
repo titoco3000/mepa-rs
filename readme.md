@@ -53,7 +53,12 @@ MEPA (Máquina de Execução de PAscal) é uma linguagem intermediária criada p
 | INPP      |             |             | s=-1; D[0] = 0                    |
 | CHPR      | p           |             | s+=1; M[s] = i+1; i=p             |
 | ENPR      | k           |             | s+=1; M[s] = D[k]; D[k] = s+1     |
-| RTPR      | k           | n           | D[k]=M[s]; i=M[s-1]; s-=n+2       |
+| RTPR      | k           | n           | D[k]=M[s]; i=M[s-1]; s-=n+2       | 
+
+### Explicações mais detalhadas
+
+#### RTPR
+Libera a memoria alocada por CHPR, ENPR e dos argumentos da função
 
 ### Formatação arquivos .mepa
 

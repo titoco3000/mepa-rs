@@ -1,0 +1,8 @@
+int GLOBAL;
+fn f(){
+    print(GLOBAL);
+}
+fn main(){
+    GLOBAL = 7;
+    f();
+}
