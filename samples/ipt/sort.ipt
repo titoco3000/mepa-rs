@@ -1,5 +1,7 @@
+int GLOBAL;
 fn print_arr(ptr arr, int n){
     int i;
+    GLOBAL = 7;
     i = 0;
     while(i<n){
         print(arr[i]);

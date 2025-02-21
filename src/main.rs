@@ -3,7 +3,7 @@ use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar_a
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 fn main() {
     if DEBUG {

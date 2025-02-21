@@ -25,7 +25,7 @@ pub struct InstructionAndMetadata {
     pub initial_memory_usage: Option<usize>,
     pub allocation: Option<Allocation>
 }
-
+#[derive(Debug, Clone)]
 pub struct FuncMetadata {
     pub addr_inicio: usize,
     pub addr_retorno: usize,
@@ -34,10 +34,28 @@ pub struct FuncMetadata {
     pub usos: Vec<usize>,
 }
 
+#[derive(Debug, Clone)]
+pub struct Variavel{
+    pub atribuicoes:Vec<usize>,
+    pub usos:Vec<usize>
+}
+
+#[derive(Debug, Clone)]
+pub struct BlocoDeVariaveis{
+    pub addr: usize,
+    pub vars: Vec<Variavel>
+}
+impl BlocoDeVariaveis {
+    pub fn new(addr:usize, qtd:usize)->BlocoDeVariaveis{
+        BlocoDeVariaveis { addr, vars: vec![Variavel{atribuicoes:Vec::new(), usos:Vec::new()};qtd] }
+    }
+}
+
 pub struct CodeGraph {
     pub grafo: Graph<Vec<InstructionAndMetadata>, ()>,
     pub funcoes: Vec<FuncMetadata>,
-    pub memoria_consistente: bool
+    pub memoria_consistente: bool,
+    pub variaveis: Vec<BlocoDeVariaveis>
 }
 
 impl CodeGraph {
@@ -48,7 +66,8 @@ impl CodeGraph {
         let mut grafo = CodeGraph {
             grafo: Graph::new(),
             funcoes: Vec::new(),
-            memoria_consistente: false
+            memoria_consistente: false,
+            variaveis: Vec::new()
         };
 
         let mut lideres: Vec<usize> = code
@@ -203,11 +222,14 @@ impl CodeGraph {
                 .collect()
         };
 
-        // procura usos de funcoes
+        // procura usos de funcoes e usos de variaveis
         let mut updates = Vec::new();
         for line in grafo.instructions_unordered() {
-            if let Instruction::CHPR(label) = &line.instruction {
-                updates.push((label.unwrap(), line.address));
+            match &line.instruction {
+                Instruction::CHPR(label)=>{
+                    updates.push((label.unwrap(), line.address));
+                },
+                _=>()
             }
         }
         for (label, address) in updates {
@@ -237,44 +259,6 @@ impl CodeGraph {
             })
             .all(|r| r);
 
-        // if grafo.memoria_consistente{
-        //     let alocs: Vec<InstructionAndMetadata> = grafo
-        //         .instructions_mut()
-        //         .filter_map(|i| {
-        //             if i.memory_delta > 0 {
-        //                 Some(i.clone())
-        //             } else {
-        //                 None
-        //             }
-        //         })
-        //         .collect();
-
-        //     // para cada instrucao com delta positivo, encontrar aquela que retorna o valor para o original
-        //     for aloc in alocs {
-        //         let node_inicio = grafo.locate_address(aloc.address).unwrap();
-        //         let mut dfs = Dfs::new(&grafo.grafo, node_inicio);
-
-        //         'outer: while let Some(visited) = dfs.next(&grafo.grafo) {
-        //             let weight = grafo.grafo.node_weight(visited).unwrap();
-        //             for line in if visited == node_inicio {
-        //                 aloc.address - weight[0].address + 1
-        //             } else {
-        //                 0
-        //             }..weight.len()
-        //             {
-        //                 if weight[line].memory_usage == aloc.memory_usage {
-        //                     grafo
-        //                         .instructions_mut()
-        //                         .find(|i| i.address == aloc.address)
-        //                         .unwrap()
-        //                         .liberation_address = Some(weight[line].address);
-        //                     break 'outer;
-        //                 }
-        //             }
-        //         }
-        //     }
-        // }        
-
         grafo
     }
     // retorna se teve sucesso ou não
@@ -291,7 +275,9 @@ impl CodeGraph {
 
         let mut dfs = Dfs::new(&self.grafo, raiz);
 
-        let mut alocation_stack = Vec::new();
+        // (address, memory, memory_delta)
+        let mut alocation_stack: Vec<(usize, usize, i32)> = Vec::new();
+
         let mut alocation_map = Vec::new();
 
         while let Some(visited) = dfs.next(&self.grafo) {
@@ -305,9 +291,8 @@ impl CodeGraph {
                 self.grafo.node_weight_mut(visited).unwrap()
             };
             let mut memory:usize = lines.first().unwrap().initial_memory_usage.unwrap();
-            // let mut last_memory = lines.first().unwrap().memory_usage.unwrap() as i32;
             for line_idx in 0..lines.len() {
-                println!("{:?}",lines[line_idx]);
+                // println!("{:?}",lines[line_idx]);
                 let memory_delta = match &lines[line_idx].instruction {
                     Instruction::CRCT(_)
                     | Instruction::CRVL(_, _)
@@ -315,8 +300,31 @@ impl CodeGraph {
                     | Instruction::CRVI(_, _)
                     | Instruction::LEIT
                     | Instruction::ENPR(_) => 1,
-                    Instruction::ARMZ(_, _)
-                    | Instruction::ARMI(_, _)
+                    Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{
+                        // if *nivel_lexico==1{
+                        //     println!("addr: {} | nivel_memoria: {} | memory: {}", lines[line_idx].address, nivel_memoria, memory);
+                        //     // Passa por cada elemento de alocation_stack, do ultimo ao primeiro, até encontrar aquele em que 
+                        //     // item.memory - item.memory_delta < nivel_memoria-4
+                        //     // se achar, print
+                        //     // se não, retorne falso
+                        //     println!("alocation_stack: {:?}",alocation_stack);
+                        //     let mut achou = false;
+                        //     for item in alocation_stack.iter().rev() {
+                        //         println!("item: {:?}",item);
+                        //         println!(" {} < {} + 4", item.1 as i32 , nivel_memoria );
+                        //         // if item.1 as i32 < nivel_memoria + 4 {
+                        //         //     println!("alocado em: {}", item.0);
+                        //         //     achou = true;
+                        //         //     break;
+                        //         // }
+                        //     }
+                        //     if !achou{
+                        //         return false;
+                        //     }
+                        // }
+                        -1
+                    },
+                    Instruction::ARMI(_, _)
                     | Instruction::SOMA
                     | Instruction::SUBT
                     | Instruction::MULT
@@ -353,10 +361,14 @@ impl CodeGraph {
                 if memory_delta > 0 {
                     alocation_stack.push((lines[line_idx].address, memory, memory_delta));
                 } else if memory_delta < 0 {
+                    println!("{} libera {}",lines[line_idx].address, memory_delta);
+                    println!("alocation_stack: {:?}",alocation_stack);
+
                     // for each item on the stack, from last to first
                     while let Some(&top) = alocation_stack.last() {
                         // if it is greater or equal than memory, pop
-                        if top.1 >= memory {
+                        println!("{} > {}",top.1, memory);
+                        if top.1 > memory {
                             alocation_stack.pop();
                             alocation_map.push((top.0, Allocation{amount:top.2 as usize,liberation_address:lines[line_idx].address}));
                         }
