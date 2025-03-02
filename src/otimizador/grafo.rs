@@ -12,11 +12,41 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::usize;
 
+
+#[derive(Debug, Clone)]
+pub struct PreAllocationData{
+    pub addr: usize,
+    pub total_memory: usize,
+    pub delta: i32,
+    pub atribuicoes: HashSet<usize>,
+    pub usos: HashSet<usize>,
+}
+
+impl PreAllocationData {
+    pub fn new(addr:usize, total_memory:usize, delta:i32)->PreAllocationData{
+        PreAllocationData {addr, total_memory, delta, atribuicoes: HashSet::new(), usos: HashSet::new() }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Allocation{
     pub amount: usize,
-    pub liberation_address: usize
+    pub addr: usize,
+    pub liberation_address: usize,
+    pub atribuicoes: HashSet<usize>,
+    pub usos: HashSet<usize>,
 }
+
+impl Allocation {
+    pub fn new(amount:usize, liberation_address:usize, addr:usize)->Allocation{
+        Allocation { amount, liberation_address, atribuicoes: HashSet::new(), usos: HashSet::new(), addr }
+    }
+    pub fn from(data: PreAllocationData, liberation_address:usize)->Allocation{
+        Allocation { amount: data.delta as usize, liberation_address, atribuicoes: data.atribuicoes, usos: data.usos, addr:data.addr }
+    }
+}
+
+
 
 #[derive(Debug, Clone)]
 pub struct InstructionAndMetadata {
@@ -29,9 +59,10 @@ pub struct InstructionAndMetadata {
 pub struct FuncMetadata {
     pub addr_inicio: usize,
     pub addr_retorno: usize,
-    pub acesso: usize, //maximo de memoria acessado externo
+    pub atribuicao_memoria_externa: HashSet<usize>,
+    pub uso_memoria_externa: HashSet<usize>,
     pub args: usize,
-    pub usos: Vec<usize>,
+    pub usos: HashSet<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -213,9 +244,10 @@ impl CodeGraph {
                     Instruction::RTPR(_, args) => Some(FuncMetadata {
                         addr_inicio,
                         addr_retorno: instruction.address,
-                        acesso: 0,
+                        atribuicao_memoria_externa: HashSet::new(),
+                        uso_memoria_externa:HashSet::new(),
                         args: args as usize,
-                        usos: Vec::new(),
+                        usos: HashSet::new(),
                     }),
                     _ => None,
                 })
@@ -235,176 +267,223 @@ impl CodeGraph {
         for (label, address) in updates {
             for f in &mut grafo.funcoes {
                 if f.addr_inicio == label {
-                    f.usos.push(address);
+                    f.usos.insert(address);
                 }
             }
         }
 
-        // lista as raizes (inicios de funcao e inicio do programa) e a memoria inicial de cada um
-        let bases_mapeamento: Vec<(usize, usize)> = grafo
-            .funcoes
-            .iter()
-            .map(|func| (func.addr_inicio, func.args+1)) // este +1 é para contar com a memoria alocada por CHPR
-            .chain(std::iter::once((0,0)))
-            .collect();
-        
-        println!("bases_mapeamento: {:?}",bases_mapeamento);
         // mapeia o uso de memoria
-        grafo.memoria_consistente = bases_mapeamento
-            .iter()
-            .map(|raiz| {
-                let r = grafo.mapear_memoria_a_partir_de(raiz.0, raiz.1);
-                println!("Mapeada a memoria a partir de {}: {}",raiz.0, r);
-                r
-            })
-            .all(|r| r);
+        grafo.mapear_memoria();
 
         grafo
     }
-    // retorna se teve sucesso ou não
-    pub fn mapear_memoria_a_partir_de(&mut self, addr: usize, initial_value: usize) -> bool {
-        let raiz = self.locate_address(addr).unwrap();
+    
+    pub fn mapear_memoria(&mut self){
+        let mut bases_mapeamento: Vec<(usize, usize)> = self
+            .funcoes
+            .iter()
+            .map(|func| (func.addr_inicio, func.args+1)) // este +1 é para contar com a memoria alocada por CHPR
+            .chain(std::iter::once((0,0))).rev()
+            .collect();
 
-        // valores da instrucao
-        for line in self.grafo.node_weight_mut(raiz).unwrap() {
-            if line.address == addr {
-                line.initial_memory_usage = Some(initial_value);
-                line.allocation = None;
+        println!("{:?}",bases_mapeamento);
+
+        // origem, endereco
+        let mut atribuicoes_globais:HashSet<(usize, usize)> = HashSet::new();
+        let mut usos_globais:HashSet<(usize, usize)> = HashSet::new();
+
+        while let Some((addr, initial_value)) = bases_mapeamento.pop() {
+            println!("(addr, initial_value): {:?}",(addr, initial_value));
+            let raiz = self.locate_address(addr).unwrap();
+            let current_func = self.get_fn_index(self.grafo.node_weight(raiz).unwrap()[0].address);
+            if let Some(i) = current_func{
+                println!("Func atual: a que começa em {}",i);
             }
-        }
-
-        let mut dfs = Dfs::new(&self.grafo, raiz);
-
-        // (address, memory, memory_delta)
-        let mut alocation_stack: Vec<(usize, usize, i32)> = Vec::new();
-
-        let mut alocation_map = Vec::new();
-
-        while let Some(visited) = dfs.next(&self.grafo) {
-            let neighbors: Vec<NodeIndex> =
-                self.grafo.neighbors(visited).map(|n| n.clone()).collect();
-            let lines = if visited == raiz {
-                let lines = self.grafo.node_weight_mut(visited).unwrap();
-                let first_addr = lines[0].address;
-                &mut lines[addr - first_addr..]
-            } else {
-                self.grafo.node_weight_mut(visited).unwrap()
-            };
-            let mut memory:usize = lines.first().unwrap().initial_memory_usage.unwrap();
-            for line_idx in 0..lines.len() {
-                // println!("{:?}",lines[line_idx]);
-                let memory_delta = match &lines[line_idx].instruction {
-                    Instruction::CRCT(_)
-                    | Instruction::CRVL(_, _)
-                    | Instruction::CREN(_, _)
-                    | Instruction::CRVI(_, _)
-                    | Instruction::LEIT
-                    | Instruction::ENPR(_) => 1,
-                    Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{
-                        // if *nivel_lexico==1{
-                        //     println!("addr: {} | nivel_memoria: {} | memory: {}", lines[line_idx].address, nivel_memoria, memory);
-                        //     // Passa por cada elemento de alocation_stack, do ultimo ao primeiro, até encontrar aquele em que 
-                        //     // item.memory - item.memory_delta < nivel_memoria-4
-                        //     // se achar, print
-                        //     // se não, retorne falso
-                        //     println!("alocation_stack: {:?}",alocation_stack);
-                        //     let mut achou = false;
-                        //     for item in alocation_stack.iter().rev() {
-                        //         println!("item: {:?}",item);
-                        //         println!(" {} < {} + 4", item.1 as i32 , nivel_memoria );
-                        //         // if item.1 as i32 < nivel_memoria + 4 {
-                        //         //     println!("alocado em: {}", item.0);
-                        //         //     achou = true;
-                        //         //     break;
-                        //         // }
-                        //     }
-                        //     if !achou{
-                        //         return false;
-                        //     }
-                        // }
-                        -1
-                    },
-                    Instruction::ARMI(_, _)
-                    | Instruction::SOMA
-                    | Instruction::SUBT
-                    | Instruction::MULT
-                    | Instruction::DIVI
-                    | Instruction::CONJ
-                    | Instruction::DISJ
-                    | Instruction::CMME
-                    | Instruction::CMMA
-                    | Instruction::CMIG
-                    | Instruction::CMDG
-                    | Instruction::CMEG
-                    | Instruction::CMAG
-                    | Instruction::DSVF(_)
-                    | Instruction::IMPR => -1,
-                    Instruction::AMEM(n) => *n,
-                    Instruction::DMEM(n) => -n,
-                    Instruction::RTPR(_, n) => -n - 2,
-                    Instruction::CHPR(k) => {
-                        //locate the function
-                        -(self
-                            .funcoes
-                            .iter()
-                            .find(|f| f.addr_inicio == k.unwrap())
-                            .unwrap()
-                            .args as i32)
-                    }
-                    _ => 0,
+            else{
+                println!("No escopo global");
+            }
+            // valores da instrucao
+            for line in self.grafo.node_weight_mut(raiz).unwrap() {
+                if line.address == addr {
+                    line.initial_memory_usage = Some(initial_value);
+                    line.allocation = None;
+                }
+            }
+    
+            let mut dfs = Dfs::new(&self.grafo, raiz);
+    
+            let mut alocation_stack: Vec<PreAllocationData> = Vec::new();
+            // (addr, aloc)
+            let mut alocation_map = Vec::new();
+    
+            while let Some(visited) = dfs.next(&self.grafo) {
+                let neighbors: Vec<NodeIndex> =
+                    self.grafo.neighbors(visited).map(|n| n.clone()).collect();
+                let lines = if visited == raiz {
+                    let lines = self.grafo.node_weight_mut(visited).unwrap();
+                    let first_addr = lines[0].address;
+                    &mut lines[addr - first_addr..]
+                } else {
+                    self.grafo.node_weight_mut(visited).unwrap()
                 };
-                // verifica se memoria total não será negativa, caso que invalida mapeamento
-                if memory_delta < 0 && memory < (-memory_delta) as usize { 
-                    return false;
-                } 
-                memory = (memory as i32 + memory_delta) as usize;
-                if memory_delta > 0 {
-                    alocation_stack.push((lines[line_idx].address, memory, memory_delta));
-                } else if memory_delta < 0 {
-                    println!("{} libera {}",lines[line_idx].address, memory_delta);
-                    println!("alocation_stack: {:?}",alocation_stack);
-
-                    // for each item on the stack, from last to first
-                    while let Some(&top) = alocation_stack.last() {
-                        // if it is greater or equal than memory, pop
-                        println!("{} > {}",top.1, memory);
-                        if top.1 > memory {
-                            alocation_stack.pop();
-                            alocation_map.push((top.0, Allocation{amount:top.2 as usize,liberation_address:lines[line_idx].address}));
+                let mut memory:usize = lines.first().unwrap().initial_memory_usage.unwrap();
+                for line_idx in 0..lines.len() {
+                    // println!("{:?}",lines[line_idx]);
+                    let memory_delta = match &lines[line_idx].instruction {
+                        Instruction::CRCT(_)
+                        | Instruction::CRVL(_, _)
+                        | Instruction::CREN(_, _)
+                        | Instruction::CRVI(_, _)
+                        | Instruction::LEIT
+                        | Instruction::ENPR(_) => 1,
+                        Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{
+                            if *nivel_lexico==1{
+                                let endereco_real = nivel_memoria+4;
+                                println!("Analisando {}: {:?}",lines[line_idx].address, lines[line_idx].instruction);
+                                println!("addr: {} | endereco real: {} | memory: {}", lines[line_idx].address, endereco_real, memory);
+                                // println!("alocation_stack: {:?}",alocation_stack);
+                                
+                                if endereco_real < 4{
+                                    println!("Acessando externo: {}",endereco_real-1);
+                                    if let Some(i) = current_func{
+                                        self.funcoes[i].atribuicao_memoria_externa.insert((endereco_real-1).abs() as usize);
+                                    }
+                                    else {
+                                        panic!("Tentou armazenar em memória negativa no escopo global");
+                                    }
+                                }
+                                else{
+                                    let mut achou = false;
+                                    for item in alocation_stack.iter_mut().rev() {
+                                        // println!("item: {:?}",item);
+                                        println!(" {} < {}", item.total_memory as i32 - item.delta , endereco_real );
+                                        if item.total_memory as i32 - item.delta < endereco_real{
+                                            item.atribuicoes.insert(lines[line_idx].address);
+                                            achou = true;
+                                            break;
+                                        }
+                                    }
+                                    if !achou{
+                                        println!("Não achou");
+                                        self.memoria_consistente = false;
+                                        return;
+                                    }
+                                }
+                            }else{
+                                atribuicoes_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
+                            }
+                            -1
+                        },
+                        Instruction::ARMI(_, _)
+                        | Instruction::SOMA
+                        | Instruction::SUBT
+                        | Instruction::MULT
+                        | Instruction::DIVI
+                        | Instruction::CONJ
+                        | Instruction::DISJ
+                        | Instruction::CMME
+                        | Instruction::CMMA
+                        | Instruction::CMIG
+                        | Instruction::CMDG
+                        | Instruction::CMEG
+                        | Instruction::CMAG
+                        | Instruction::DSVF(_)
+                        | Instruction::IMPR => -1,
+                        Instruction::AMEM(n) => *n,
+                        Instruction::DMEM(n) => -n,
+                        Instruction::RTPR(_, n) => -n - 2,
+                        Instruction::CHPR(k) => {
+                            //locate the function
+                            -(self
+                                .funcoes
+                                .iter()
+                                .find(|f| f.addr_inicio == k.unwrap())
+                                .unwrap()
+                                .args as i32)
                         }
-                        // else, stop
-                        else {
-                            break;
+                        _ => 0,
+                    };
+                    // verifica se memoria total não será negativa, caso que invalida mapeamento
+                    if memory_delta < 0 && memory < (-memory_delta) as usize { 
+                        self.memoria_consistente = false;
+                        return;
+                    } 
+                    memory = (memory as i32 + memory_delta) as usize;
+                    if memory_delta > 0 {
+                        alocation_stack.push(PreAllocationData::new(lines[line_idx].address, memory, memory_delta));
+                    } else if memory_delta < 0 {
+                        println!("{} libera {}",lines[line_idx].address, memory_delta);
+    
+                        // Enquanto tiver itens no stack
+                        while let Some(top) = alocation_stack.pop() {
+                            // Se a memoria do item foi maior ou igual a atual, adiciona ao mapa
+                            println!("{} > {}",top.total_memory, memory);
+                            if top.total_memory > memory {
+                                if let None = current_func{
+                                    let top_addr = top.addr;
+                                    let mut aloc = Allocation::from(top, lines[line_idx].address);
+                                    usos_globais.retain(|&(origem, addr)| {
+                                        if addr >= memory && addr <= memory+aloc.amount {
+                                            aloc.usos.insert(origem);
+                                            false
+                                        } else {
+                                            true
+                                        }
+                                    });
+                                    atribuicoes_globais.retain(|&(origem, addr)| {
+                                        println!("addr: {}, memory: {}",addr,memory);
+                                        if addr >= memory && addr <= memory+aloc.amount {
+                                            aloc.atribuicoes.insert(origem);
+                                            false
+                                        } else {
+                                            true
+                                        }
+                                    });
+                                    alocation_map.push((top_addr, aloc));
+                                }else{
+                                    alocation_map.push((top.addr, Allocation::from(top, lines[line_idx].address)));
+                                }
+                            }
+                            // se não, devolve a pilha e encerra
+                            else {
+                                alocation_stack.push(top);
+                                break;
+                            }
                         }
                     }
-                }
-                // se houver proximo (não for ultima passada do loop), adiciona memoria inicial ao proximo
-                if line_idx + 1 < lines.len() {
-                    lines[line_idx + 1].initial_memory_usage = Some(memory as usize);
-                }
-            }
-            // Propagate to neighbors
-            for neighbor_index in neighbors.into_iter() {
-                let neighbor = self
-                    .grafo
-                    .node_weight_mut(neighbor_index)
-                    .unwrap()
-                    .first_mut()
-                    .unwrap();
-                if let Some(existing_value) = neighbor.initial_memory_usage {
-                    if existing_value != memory as usize {
-                        // falhou o mapeamento
-                        return false;
+                    // se houver proximo (não for ultima passada do loop), adiciona memoria inicial ao proximo
+                    if line_idx + 1 < lines.len() {
+                        lines[line_idx + 1].initial_memory_usage = Some(memory as usize);
                     }
                 }
-                neighbor.initial_memory_usage = Some(memory as usize);
+                // Propagate to neighbors
+                for neighbor_index in neighbors.into_iter() {
+                    let neighbor = self
+                        .grafo
+                        .node_weight_mut(neighbor_index)
+                        .unwrap()
+                        .first_mut()
+                        .unwrap();
+                    if let Some(existing_value) = neighbor.initial_memory_usage {
+                        if existing_value != memory as usize {
+                            // falhou o mapeamento
+                            self.memoria_consistente = false;
+                            return;
+                        }
+                    }
+                    neighbor.initial_memory_usage = Some(memory as usize);
+                }
+            }
+    
+            for (addr, aloc) in alocation_map {
+                self.instruction_mut(addr).unwrap().allocation = Some(aloc);
             }
         }
+        self.memoria_consistente = true;
+    }
 
-        for (addr, aloc) in alocation_map {
-            self.instruction_mut(addr).unwrap().allocation = Some(aloc);
-        }
-        true
+    pub fn mapear_memoria_a_partir_de(&mut self, addr: usize, initial_value: usize) -> bool {
+        panic!("Talvez implementar isso depois");
     }
     
     pub fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
@@ -443,6 +522,10 @@ impl CodeGraph {
         self.grafo
             .node_weights()
             .flat_map(|node_instructions| node_instructions.iter())
+    }
+
+    pub fn get_fn_index(&self, addr:usize)->Option<usize>{
+        self.funcoes.iter().enumerate().find_map(|(i, f)| if addr >= f.addr_inicio && addr<=f.addr_retorno{Some(i)}else{None})
     }
 
     //falta incluir mudança de contagem de chamadas de funcao
@@ -492,7 +575,7 @@ impl CodeGraph {
                 {
                     if let Some(f) = self.funcoes.get_mut(index) {
                         if let Some(i) = f.usos.iter().position(|n| *n == addr) {
-                            f.usos.swap_remove(i);
+                            f.usos.remove(&i);
                         }
                     }
                 }
@@ -652,8 +735,8 @@ impl CodeGraph {
                             linha.instruction,
                             if let Some(aloc) = &linha.allocation {
                                 format!(
-                                    " ({} | {})",
-                                    aloc.amount, aloc.liberation_address
+                                    " ({:?} | {:?} | {})",
+                                    aloc.atribuicoes, aloc.usos, aloc.liberation_address
                                 )
                             } else {
                                 "".to_string()

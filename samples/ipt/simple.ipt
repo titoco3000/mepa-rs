@@ -1,4 +1,9 @@
+int g;
 fn f(ptr a){
+    int x;
+    x = 1;
+    a=0;
+    g = 15;
     return 42;
 }
 

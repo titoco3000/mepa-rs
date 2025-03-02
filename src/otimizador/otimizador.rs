@@ -163,7 +163,7 @@ fn elimidar_codigo_morto(code: &mut CodeGraph) -> bool {
         mudou = true;
     }
     if mudou{
-        code.mapear_memoria_a_partir_de(0, 0);
+        code.mapear_memoria();
     }
     mudou
 }
