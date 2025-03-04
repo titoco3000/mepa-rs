@@ -20,11 +20,12 @@ pub struct PreAllocationData{
     pub delta: i32,
     pub atribuicoes: HashSet<usize>,
     pub usos: HashSet<usize>,
+    pub referencias: HashSet<usize>,
 }
 
 impl PreAllocationData {
     pub fn new(addr:usize, total_memory:usize, delta:i32)->PreAllocationData{
-        PreAllocationData {addr, total_memory, delta, atribuicoes: HashSet::new(), usos: HashSet::new() }
+        PreAllocationData {addr, total_memory, delta, atribuicoes: HashSet::new(), usos: HashSet::new(), referencias: HashSet::new()  }
     }
 }
 
@@ -35,14 +36,15 @@ pub struct Allocation{
     pub liberation_address: usize,
     pub atribuicoes: HashSet<usize>,
     pub usos: HashSet<usize>,
+    pub referencias: HashSet<usize>,
 }
 
 impl Allocation {
     pub fn new(amount:usize, liberation_address:usize, addr:usize)->Allocation{
-        Allocation { amount, liberation_address, atribuicoes: HashSet::new(), usos: HashSet::new(), addr }
+        Allocation { amount, liberation_address, atribuicoes: HashSet::new(), usos: HashSet::new(), referencias: HashSet::new(), addr }
     }
     pub fn from(data: PreAllocationData, liberation_address:usize)->Allocation{
-        Allocation { amount: data.delta as usize, liberation_address, atribuicoes: data.atribuicoes, usos: data.usos, addr:data.addr }
+        Allocation { amount: data.delta as usize, liberation_address, atribuicoes: data.atribuicoes, usos: data.usos, referencias:data.referencias, addr:data.addr }
     }
 }
 
@@ -61,6 +63,7 @@ pub struct FuncMetadata {
     pub addr_retorno: usize,
     pub atribuicao_memoria_externa: HashSet<usize>,
     pub uso_memoria_externa: HashSet<usize>,
+    pub referencias_memoria_externa: HashSet<usize>,
     pub args: usize,
     pub usos: HashSet<usize>,
 }
@@ -245,6 +248,7 @@ impl CodeGraph {
                         addr_retorno: instruction.address,
                         atribuicao_memoria_externa: HashSet::new(),
                         uso_memoria_externa:HashSet::new(),
+                        referencias_memoria_externa:HashSet::new(),
                         args: args as usize,
                         usos: HashSet::new(),
                     }),
@@ -290,17 +294,11 @@ impl CodeGraph {
         // origem, endereco
         let mut atribuicoes_globais:HashSet<(usize, usize)> = HashSet::new();
         let mut usos_globais:HashSet<(usize, usize)> = HashSet::new();
+        let mut referencias_globais:HashSet<(usize, usize)> = HashSet::new();
 
         while let Some((addr, initial_value)) = bases_mapeamento.pop() {
-            println!("(addr, initial_value): {:?}",(addr, initial_value));
             let raiz = self.locate_address(addr).unwrap();
             let current_func = self.get_fn_index(self.grafo.node_weight(raiz).unwrap()[0].address);
-            if let Some(i) = current_func{
-                println!("Func atual: a que começa em {}",i);
-            }
-            else{
-                println!("No escopo global");
-            }
             // valores da instrucao
             for line in self.grafo.node_weight_mut(raiz).unwrap() {
                 if line.address == addr {
@@ -330,7 +328,6 @@ impl CodeGraph {
                     // println!("{:?}",lines[line_idx]);
                     let memory_delta = match &lines[line_idx].instruction {
                         Instruction::CRCT(_)
-                        | Instruction::CREN(_, _)
                         | Instruction::CRVI(_, _)
                         | Instruction::LEIT
                         | Instruction::ENPR(_) => 1,
@@ -365,6 +362,37 @@ impl CodeGraph {
                                 usos_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
                             }
                         1},
+                        | Instruction::CREN(nivel_lexico, nivel_memoria)=>{
+                            if *nivel_lexico==1{
+                                let endereco_real = nivel_memoria+4;
+                                if endereco_real < 4{
+                                    if let Some(i) = current_func{
+                                        self.funcoes[i].referencias_memoria_externa.insert((endereco_real-1).abs() as usize);
+                                    }
+                                    else {
+                                        panic!("Tentou carregar de memória negativa no escopo global");
+                                    }
+                                }
+                                else{
+                                    let mut achou = false;
+                                    for item in alocation_stack.iter_mut().rev() {
+                                        println!(" {} < {}", item.total_memory as i32 - item.delta , endereco_real );
+                                        if item.total_memory as i32 - item.delta < endereco_real{
+                                            item.referencias.insert(lines[line_idx].address);
+                                            achou = true;
+                                            break;
+                                        }
+                                    }
+                                    if !achou{
+                                        println!("Não achou");
+                                        self.memoria_consistente = false;
+                                        return;
+                                    }
+                                }
+                            }else{
+                                referencias_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
+                            }
+                        1}
                         Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{                        
                             if *nivel_lexico==1{
                                 let endereco_real = nivel_memoria+4;
@@ -474,9 +502,16 @@ impl CodeGraph {
                                         }
                                     });
                                     atribuicoes_globais.retain(|&(origem, addr)| {
-                                        println!("addr: {}, memory: {}",addr,memory);
                                         if addr >= memory && addr <= memory+aloc.amount {
                                             aloc.atribuicoes.insert(origem);
+                                            false
+                                        } else {
+                                            true
+                                        }
+                                    });
+                                    referencias_globais.retain(|&(origem, addr)| {
+                                        if addr >= memory && addr <= memory+aloc.amount {
+                                            aloc.referencias.insert(origem);
                                             false
                                         } else {
                                             true
@@ -778,8 +813,8 @@ impl CodeGraph {
                             linha.instruction,
                             if let Some(aloc) = &linha.allocation {
                                 format!(
-                                    " ({:?} | {:?} | {})",
-                                    aloc.atribuicoes, aloc.usos, aloc.liberation_address
+                                    " ({} | {} | {} | {})",
+                                    aloc.atribuicoes.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.usos.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.referencias.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.liberation_address
                                 )
                             } else {
                                 "".to_string()
@@ -818,7 +853,7 @@ impl CodeGraph {
         // adiciona legenda
         if let Some(pos) = processed_dot.rfind('}') {
             processed_dot.insert_str(pos, 
-                if self.memoria_consistente{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA\\naddr: instrução (atribuições | usos | addr de dealoc)\"]\n"}
+                if self.memoria_consistente{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA\\naddr: instrução (atribuições | usos | referências | addr de dealoc)\"]\n"}
                 else{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA (caso: memória inconsistente)\\naddr: instrução\"]\n"});
         }
 
