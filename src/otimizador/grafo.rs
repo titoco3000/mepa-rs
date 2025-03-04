@@ -431,8 +431,8 @@ impl CodeGraph {
                             }
                             -1
                         },
-                        Instruction::ARMI(_, _)
-                        | Instruction::SOMA
+                        //operadores de dois args
+                        Instruction::SOMA
                         | Instruction::SUBT
                         | Instruction::MULT
                         | Instruction::DIVI
@@ -443,7 +443,27 @@ impl CodeGraph {
                         | Instruction::CMIG
                         | Instruction::CMDG
                         | Instruction::CMEG
-                        | Instruction::CMAG
+                        | Instruction::CMAG =>{
+                            let endereco_real = memory as i32-1;
+                            println!("{:?}: {}",lines[line_idx].instruction, endereco_real);
+                            let mut achou = false;
+                                    for item in alocation_stack.iter_mut().rev() {
+                                        // println!("item: {:?}",item);
+                                        println!(" {} < {}", item.total_memory as i32 - item.delta , endereco_real );
+                                        if item.total_memory as i32 - item.delta < endereco_real{
+                                            item.atribuicoes.insert(lines[line_idx].address);
+                                            achou = true;
+                                            break;
+                                        }
+                                    }
+                                    if !achou{
+                                        println!("Não achou");
+                                        self.memoria_consistente = false;
+                                        return;
+                                    }
+                            -1
+                        }
+                        Instruction::ARMI(_, _)
                         | Instruction::DSVF(_)
                         | Instruction::IMPR => -1,
                         Instruction::AMEM(n) => *n,
