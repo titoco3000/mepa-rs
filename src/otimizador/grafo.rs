@@ -111,8 +111,7 @@ impl CodeGraph {
                 } else {
                     match code {
                         Instruction::DSVF(label)
-                        | Instruction::DSVS(label)
-                        | Instruction::CHPR(label) => {
+                        | Instruction::DSVS(label) => {
                             if let Label::Literal(addr) = label {
                                 Some(vec![i + 1, *addr]) // Add the next instruction and jump address
                             } else {
@@ -331,12 +330,42 @@ impl CodeGraph {
                     // println!("{:?}",lines[line_idx]);
                     let memory_delta = match &lines[line_idx].instruction {
                         Instruction::CRCT(_)
-                        | Instruction::CRVL(_, _)
                         | Instruction::CREN(_, _)
                         | Instruction::CRVI(_, _)
                         | Instruction::LEIT
                         | Instruction::ENPR(_) => 1,
-                        Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{
+                        Instruction::CRVL(nivel_lexico, nivel_memoria) => {
+                            if *nivel_lexico==1{
+                                let endereco_real = nivel_memoria+4;
+                                if endereco_real < 4{
+                                    if let Some(i) = current_func{
+                                        self.funcoes[i].atribuicao_memoria_externa.insert((endereco_real-1).abs() as usize);
+                                    }
+                                    else {
+                                        panic!("Tentou carregar de memória negativa no escopo global");
+                                    }
+                                }
+                                else{
+                                    let mut achou = false;
+                                    for item in alocation_stack.iter_mut().rev() {
+                                        println!(" {} < {}", item.total_memory as i32 - item.delta , endereco_real );
+                                        if item.total_memory as i32 - item.delta < endereco_real{
+                                            item.usos.insert(lines[line_idx].address);
+                                            achou = true;
+                                            break;
+                                        }
+                                    }
+                                    if !achou{
+                                        println!("Não achou");
+                                        self.memoria_consistente = false;
+                                        return;
+                                    }
+                                }
+                            }else{
+                                usos_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
+                            }
+                        1},
+                        Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{                        
                             if *nivel_lexico==1{
                                 let endereco_real = nivel_memoria+4;
                                 println!("Analisando {}: {:?}",lines[line_idx].address, lines[line_idx].instruction);
@@ -412,6 +441,20 @@ impl CodeGraph {
                     if memory_delta > 0 {
                         alocation_stack.push(PreAllocationData::new(lines[line_idx].address, memory, memory_delta));
                     } else if memory_delta < 0 {
+                        
+                        // se for uma desaloc que usa o valor, adiciona como uso
+                        match &lines[line_idx].instruction {
+                            Instruction::DMEM(_) | Instruction::RTPR(_, _)=>(),
+                            _=>{
+                                if let Some(item) = alocation_stack.iter_mut().last() {
+                                    item.usos.insert(lines[line_idx].address);
+                                }else{
+                                    self.memoria_consistente = false;
+                                    return;
+                                }
+                            }
+                        }
+
                         println!("{} libera {}",lines[line_idx].address, memory_delta);
     
                         // Enquanto tiver itens no stack
@@ -770,7 +813,14 @@ impl CodeGraph {
             Dot::with_config(&graph_with_code, &[Config::EdgeNoLabel])
         );
 
-        let processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
+        let mut processed_dot = raw_dot.replace("\\\"", "").replace("\\\\", "\\");
+
+        // adiciona legenda
+        if let Some(pos) = processed_dot.rfind('}') {
+            processed_dot.insert_str(pos, 
+                if self.memoria_consistente{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA\\naddr: instrução (atribuições | usos | addr de dealoc)\"]\n"}
+                else{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA (caso: memória inconsistente)\\naddr: instrução\"]\n"});
+        }
 
         // Write the processed string to the file
         write!(&file, "{}", processed_dot)

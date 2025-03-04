@@ -1,13 +1,5 @@
-int g;
-fn f(ptr a){
-    int x;
-    x = 1;
-    a=0;
-    g = 15;
-    return 42;
-}
 
 fn main(){
     int arr[4];
-    return f(arr);
+    arr[2] = 20;
 }
