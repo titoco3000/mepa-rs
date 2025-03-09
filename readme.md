@@ -154,5 +154,5 @@ Nesse modo, todas as opções passadas (-o, --debug, etc) são aplicadas sequenc
 
 # Próximos passos
 
-- Melhorar o grafo de codigo para incluir todas as informações
-- Adicionar nele opções de exportação
+- Ao encontrar CHPR, ve se a funcao ja está definida. Se não, adiciona numa fila de tarefas
+- 

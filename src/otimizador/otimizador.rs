@@ -40,6 +40,8 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
         }
     }
 
+    code.print_vars();
+
     code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
         .unwrap();
 
@@ -50,7 +52,6 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
 //retorna se mudou algo
 fn fluxo(code: &mut CodeGraph) -> bool {
     println!("Otimizando fluxo");
-    let mut mudou = false;
     // cria vec de (origem, destino)
     let mut desvio_para_desvio: Vec<(usize, usize)> = code
         .grafo

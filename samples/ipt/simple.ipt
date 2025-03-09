@@ -1,5 +1,50 @@
+int GLOBAL;
+fn print_arr(ptr arr, int n){
+    int i;
+    GLOBAL = 7;
+    i = 0;
+    while(i<n){
+        print(arr[i]);
+        i = i+1;
+    }
+}
+
+fn bubble_sort(ptr arr, int n){
+    int i, j, temp;
+    print_arr(arr, n);
+    i = 0;
+    while(i<n){
+        j = i + 1;
+        while(j<n){
+            if(arr[i] > arr[j]){
+                temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;                
+            }
+            j = j + 1;
+        }
+        i = i+1;
+    }
+    return 0;
+}
 
 fn main(){
-    int arr[4];
-    arr[2] = 20;
+    int arr[3], x;
+    
+    arr[0] = 2;
+    arr[1] = 1;
+    arr[2] = 3;
+
+    // equivalente a:
+    // ptr ref;
+    // ref = &arr;
+    // ref[0] = 2;
+    // ref[1] = 1;
+    // ref[2] = 3;
+
+    print_arr(arr, 3);
+    bubble_sort(arr, 3);
+    print_arr(arr, 3);
+
+    return 1;
 }
