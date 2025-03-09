@@ -3,7 +3,7 @@ use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
 use petgraph::dot::{Config, Dot};
 use petgraph::graph::NodeIndex;
-use petgraph::visit::EdgeRef;
+use petgraph::visit::{Dfs, EdgeRef};
 use petgraph::Graph;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -34,14 +34,10 @@ impl Variavel {
 
 #[derive(Debug, Clone)]
 pub struct Allocation {
-    // pub amount: usize,
     pub addr: usize,
     pub liberation_address: Option<usize>,
     pub nivel_memoria: usize,
     pub variaveis: Vec<Variavel>,
-    // pub atribuicoes: HashSet<usize>,
-    // pub usos: HashSet<usize>,
-    // pub referencias: HashSet<usize>,
 }
 
 impl Allocation {
@@ -186,48 +182,6 @@ impl CodeGraph {
 
         grafo.grafo.extend_with_edges(&arestas);
 
-        //localiza todas as funcoes (inicio e fim)
-        grafo.funcoes = {
-            let mut addr_inicio = 0;
-            grafo
-                .instructions_mut()
-                .filter_map(|instruction| match instruction.instruction {
-                    Instruction::ENPR(_) => {
-                        addr_inicio = instruction.address;
-                        None
-                    }
-                    Instruction::RTPR(_, args) => Some(FuncMetadata {
-                        addr_inicio,
-                        addr_retorno: instruction.address,
-                        atribuicao_memoria_externa: HashSet::new(),
-                        uso_memoria_externa: HashSet::new(),
-                        referencias_memoria_externa: HashSet::new(),
-                        args: args as usize,
-                        usos: HashSet::new(),
-                    }),
-                    _ => None,
-                })
-                .collect()
-        };
-
-        // procura usos de funcoes e usos de variaveis
-        let mut updates = Vec::new();
-        for line in grafo.instructions_unordered() {
-            match &line.instruction {
-                Instruction::CHPR(label) => {
-                    updates.push((label.unwrap(), line.address));
-                }
-                _ => (),
-            }
-        }
-        for (label, address) in updates {
-            for f in &mut grafo.funcoes {
-                if f.addr_inicio == label {
-                    f.usos.insert(address);
-                }
-            }
-        }
-
         // mapeia o uso de memoria
         grafo.mapear_memoria();
 
@@ -235,7 +189,10 @@ impl CodeGraph {
     }
 
     pub fn mapear_memoria(&mut self) {
-        self.memoria_consistente = true;
+        self.mapear_funcoes();
+        if !self.memoria_consistente{
+            return;
+        }
         let mut bases_mapeamento: Vec<(usize, usize)> = self
             .funcoes
             .iter()
@@ -298,13 +255,9 @@ impl CodeGraph {
                         Instruction::CRVL(nivel_lexico, nivel_memoria) => {
                             println!("{:?}", lines[line_idx]);
                             if *nivel_lexico == 1 {
-                                if let Some(func_idx) = current_func {
+                                if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real < 0 {
-                                        self.funcoes[func_idx]
-                                            .uso_memoria_externa
-                                            .insert(endereco_real);
-                                    } else {
+                                    if endereco_real >= 0 {
                                         println!(
                                             "Procurando qnd o nivel chega de novo a {}",
                                             endereco_real
@@ -341,13 +294,9 @@ impl CodeGraph {
                         }
                         Instruction::CREN(nivel_lexico, nivel_memoria) => {
                             if *nivel_lexico == 1 {
-                                if let Some(func_idx) = current_func {
+                                if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real < 0 {
-                                        self.funcoes[func_idx]
-                                            .referencias_memoria_externa
-                                            .insert(endereco_real);
-                                    } else {
+                                    if endereco_real >= 0{
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
@@ -379,13 +328,9 @@ impl CodeGraph {
                         }
                         Instruction::ARMZ(nivel_lexico, nivel_memoria) => {
                             if *nivel_lexico == 1 {
-                                if let Some(func_idx) = current_func {
+                                if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real < 0 {
-                                        self.funcoes[func_idx]
-                                            .atribuicao_memoria_externa
-                                            .insert(endereco_real);
-                                    } else {
+                                    if endereco_real >= 0 {
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
@@ -452,13 +397,75 @@ impl CodeGraph {
                         Instruction::DMEM(n) => -n,
                         Instruction::RTPR(_, _n) => -2, // ignora o 'n' para só ser considerado na chamada
                         Instruction::CHPR(k) => {
-                            //locate the function
-                            -(self
+                            println!("Chamada a  funcao {}",k);
+                            //localiza a funcao
+                            let func = self
                                 .funcoes
-                                .iter()
+                                .iter_mut()
                                 .find(|f| f.addr_inicio == k.unwrap())
-                                .unwrap()
-                                .args as i32)
+                                .unwrap();
+                            
+                            // registra uso
+                            func.usos.insert(lines[line_idx].address);
+
+                            // registra acessos
+                            for acesso in func.atribuicao_memoria_externa.iter(){
+                                let endereco_real = memory as i32 + acesso;
+                                let achou = alocation_stack.iter_mut().rev().any(|item| {
+                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    if endereco_relativo >= 0 {
+                                        item.variaveis[endereco_relativo as usize]
+                                            .atribuicoes
+                                            .insert(lines[line_idx].address);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                });
+                                if !achou {
+                                    self.memoria_consistente = false;
+                                    return;
+                                }
+                            }
+                            for acesso in func.uso_memoria_externa.iter(){
+                                let endereco_real = memory as i32 + acesso;
+                                let achou = alocation_stack.iter_mut().rev().any(|item| {
+                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    if endereco_relativo >= 0 {
+                                        item.variaveis[endereco_relativo as usize]
+                                            .usos
+                                            .insert(lines[line_idx].address);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                });
+                                if !achou {
+                                    self.memoria_consistente = false;
+                                    return;
+                                }
+                            }
+                            for acesso in func.referencias_memoria_externa.iter(){
+                                let endereco_real = memory as i32 + acesso;
+                                let achou = alocation_stack.iter_mut().rev().any(|item| {
+                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    if endereco_relativo >= 0 {
+                                        item.variaveis[endereco_relativo as usize]
+                                            .referencias
+                                            .insert(lines[line_idx].address);
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                });
+                                if !achou {
+                                    self.memoria_consistente = false;
+                                    return;
+                                }
+                            }
+
+                            //libera qtd de args
+                            -(func.args as i32)
                         }
                         _ => 0,
                     };
@@ -618,6 +625,77 @@ impl CodeGraph {
                 self.instruction_mut(addr).unwrap().allocation = Some(aloc);
             }
         }
+    }
+
+    // mapeia todas as informações de funções, exceto quando são chamadas
+    pub fn mapear_funcoes(&mut self){
+        let mut memoria_consistente = true;
+        self.funcoes = self.instructions_unordered()
+            // localiza todos os nodes que são inicio de função
+            .filter_map(|line| match line.instruction{
+                Instruction::ENPR(_)=>Some(line.address),
+                _=>None
+            })
+            // para cada um deles, encontra:
+            // - o endereço de retorno
+            // - o numero de argumentos
+            // - os acessos externos
+            .map(|addr_inicio|{
+                let node_func = self.locate_address(addr_inicio).unwrap();
+                let mut atribuicao_memoria_externa: HashSet<i32> = HashSet::new();
+                let mut uso_memoria_externa: HashSet<i32> = HashSet::new();
+                let mut referencias_memoria_externa: HashSet<i32> = HashSet::new();
+                let mut args = 0;
+                let mut addr_retorno = 0;
+
+                let mut dfs = Dfs::new(&self.grafo, node_func);
+                while let Some(visited) = dfs.next(&self.grafo) {
+                    for line in self.grafo.node_weight(visited).unwrap(){
+                        match line.instruction {
+                            Instruction::ARMZ(nivel_lexico, nivel_memoria)=>{
+                                if nivel_lexico==1 && nivel_memoria<0{
+                                    if nivel_memoria>-3{
+                                        memoria_consistente = false;
+                                    }
+                                    else{
+                                        atribuicao_memoria_externa.insert(nivel_memoria+2);
+                                    }
+                                }
+                            },
+                            Instruction::CRVL(nivel_lexico, nivel_memoria)=>{
+                                if nivel_lexico==1 && nivel_memoria<0{
+                                    if nivel_memoria>-3{
+                                        memoria_consistente = false;
+                                    }
+                                    else{
+                                        uso_memoria_externa.insert(nivel_memoria+2);
+                                    }
+                                }
+                            }
+                            Instruction::CREN(nivel_lexico, nivel_memoria)=>{
+                                if nivel_lexico==1 && nivel_memoria<0{
+                                    if nivel_memoria>-3{
+                                        memoria_consistente = false;
+                                    }
+                                    else{
+                                        referencias_memoria_externa.insert(nivel_memoria+2);
+                                    }
+                                }
+                            }
+                            Instruction::RTPR(_, k)=>{
+                                addr_retorno = line.address;
+                                args = k as usize;
+                            }
+                            _=>()
+                        }
+                    }
+                }
+                FuncMetadata{
+                    addr_inicio, addr_retorno, atribuicao_memoria_externa, uso_memoria_externa, referencias_memoria_externa, args, usos:HashSet::new()
+                }
+            })
+            .collect();
+        self.memoria_consistente = memoria_consistente;
     }
 
     pub fn mapear_memoria_a_partir_de(&mut self, _addr: usize, _initial_value: usize) -> bool {

@@ -15,7 +15,7 @@ fn main() {
         compile(&PathBuf::from("samples/ipt/simple.ipt"), &output_path, true)
             .unwrap()
             .unwrap();
-        // machine::interactive_execution(&output_path, vec![]);
+        machine::interactive_execution(&output_path, vec![]);
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")
