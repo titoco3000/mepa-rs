@@ -1,8 +1,8 @@
-pub mod utils;
-pub mod mepa;
 pub mod compiler;
 pub mod machine;
+pub mod mepa;
 pub mod otimizador;
+pub mod utils;
 
 // use wasm_bindgen::prelude::*;
 

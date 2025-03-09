@@ -1,6 +1,6 @@
+use super::code::MepaCode;
 use std::fmt;
 use std::str::FromStr;
-use super::code::MepaCode;
 
 #[derive(Debug, Clone)]
 pub enum Label {
@@ -25,13 +25,13 @@ impl Label {
             Self::Literal(u) => Some(*u),
         }
     }
-    pub fn new(id:usize)->Label{
-        Self::Simbolic(format!("L{}",id))
+    pub fn new(id: usize) -> Label {
+        Self::Simbolic(format!("L{}", id))
     }
-    pub fn unwrap(&self)->usize{
+    pub fn unwrap(&self) -> usize {
         match self {
-            Self::Literal(n)=>*n,
-            Self::Simbolic(_)=>panic!("unwrap em label simbolica")
+            Self::Literal(n) => *n,
+            Self::Simbolic(_) => panic!("unwrap em label simbolica"),
         }
     }
 }

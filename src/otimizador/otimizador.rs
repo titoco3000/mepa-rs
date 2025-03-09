@@ -131,39 +131,45 @@ fn elimidar_codigo_morto(code: &mut CodeGraph) -> bool {
     println!("Eliminando codigo morto");
     let mut mudou = false;
     // acha nodes inacessiveis
-    let inacessiveis:Vec<NodeIndex> = code.grafo.node_indices().filter(|node_idx|{
-        code.grafo
-            .edges_directed(*node_idx, petgraph::Direction::Incoming)
-            .count() == 0 && {
-                let line = code.grafo.node_weight(*node_idx).unwrap().first().unwrap();
-                // node inicial não deve ser removido
-                if line.address == 0 {
-                    false
-                } else {
-                    match line.instruction {
-                        // se é entrada de uma função
-                        Instruction::ENPR(_) => {
-                            // remove se não tiver nenhuma chamada
-                            code.funcoes
-                                .iter()
-                                .find(|f| f.addr_inicio == line.address)
-                                .unwrap()
-                                .usos
-                                .len()
-                                == 0
+    let inacessiveis: Vec<NodeIndex> = code
+        .grafo
+        .node_indices()
+        .filter(|node_idx| {
+            code.grafo
+                .edges_directed(*node_idx, petgraph::Direction::Incoming)
+                .count()
+                == 0
+                && {
+                    let line = code.grafo.node_weight(*node_idx).unwrap().first().unwrap();
+                    // node inicial não deve ser removido
+                    if line.address == 0 {
+                        false
+                    } else {
+                        match line.instruction {
+                            // se é entrada de uma função
+                            Instruction::ENPR(_) => {
+                                // remove se não tiver nenhuma chamada
+                                code.funcoes
+                                    .iter()
+                                    .find(|f| f.addr_inicio == line.address)
+                                    .unwrap()
+                                    .usos
+                                    .len()
+                                    == 0
+                            }
+                            // se não pode remover
+                            _ => true,
                         }
-                        // se não pode remover
-                        _ => true,
                     }
                 }
-            }
-        }).collect();
+        })
+        .collect();
 
-    for i in inacessiveis{
+    for i in inacessiveis {
         code.remove_node(i);
         mudou = true;
     }
-    if mudou{
+    if mudou {
         code.mapear_memoria();
     }
     mudou

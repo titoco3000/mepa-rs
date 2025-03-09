@@ -13,51 +13,58 @@ use std::path::PathBuf;
 use std::usize;
 
 #[derive(Debug, Clone)]
-pub struct Variavel{
+pub struct Variavel {
     pub atribuicoes: HashSet<usize>,
     pub usos: HashSet<usize>,
     pub referencias: HashSet<usize>,
 }
 
 impl Variavel {
-    pub fn new()->Variavel{
-        Variavel{atribuicoes:HashSet::new(),usos:HashSet::new(),referencias:HashSet::new()}
+    pub fn new() -> Variavel {
+        Variavel {
+            atribuicoes: HashSet::new(),
+            usos: HashSet::new(),
+            referencias: HashSet::new(),
+        }
     }
-    pub fn new_vec(amount:usize)->Vec<Variavel>{
+    pub fn new_vec(amount: usize) -> Vec<Variavel> {
         (0..amount).map(|_| Variavel::new()).collect()
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct Allocation{
+pub struct Allocation {
     // pub amount: usize,
     pub addr: usize,
     pub liberation_address: Option<usize>,
-    pub nivel_memoria:usize,
-    pub variaveis:Vec<Variavel>,
+    pub nivel_memoria: usize,
+    pub variaveis: Vec<Variavel>,
     // pub atribuicoes: HashSet<usize>,
     // pub usos: HashSet<usize>,
     // pub referencias: HashSet<usize>,
 }
 
 impl Allocation {
-    pub fn new(addr:usize,amount:usize, nivel_memoria:usize)->Allocation{
-        Allocation {addr, liberation_address:None, variaveis:Variavel::new_vec(amount), nivel_memoria }
+    pub fn new(addr: usize, amount: usize, nivel_memoria: usize) -> Allocation {
+        Allocation {
+            addr,
+            liberation_address: None,
+            variaveis: Variavel::new_vec(amount),
+            nivel_memoria,
+        }
     }
-    pub fn liberate(mut self, addr:usize)->Self{
+    pub fn liberate(mut self, addr: usize) -> Self {
         self.liberation_address = Some(addr);
         self
     }
 }
-
-
 
 #[derive(Debug, Clone)]
 pub struct InstructionAndMetadata {
     pub address: usize,
     pub instruction: Instruction,
     pub initial_memory_usage: Option<usize>,
-    pub allocation: Option<Allocation>
+    pub allocation: Option<Allocation>,
 }
 #[derive(Debug, Clone)]
 pub struct FuncMetadata {
@@ -96,8 +103,7 @@ impl CodeGraph {
                     Some(vec![0])
                 } else {
                     match code {
-                        Instruction::DSVF(label)
-                        | Instruction::DSVS(label) => {
+                        Instruction::DSVF(label) | Instruction::DSVS(label) => {
                             if let Label::Literal(addr) = label {
                                 Some(vec![i + 1, *addr]) // Add the next instruction and jump address
                             } else {
@@ -126,7 +132,7 @@ impl CodeGraph {
                         address: addr,
                         instruction: code[addr].1.clone(),
                         initial_memory_usage: None,
-                        allocation:None
+                        allocation: None,
                     })
                     .collect();
                 grafo.grafo.add_node(instructions)
@@ -194,8 +200,8 @@ impl CodeGraph {
                         addr_inicio,
                         addr_retorno: instruction.address,
                         atribuicao_memoria_externa: HashSet::new(),
-                        uso_memoria_externa:HashSet::new(),
-                        referencias_memoria_externa:HashSet::new(),
+                        uso_memoria_externa: HashSet::new(),
+                        referencias_memoria_externa: HashSet::new(),
                         args: args as usize,
                         usos: HashSet::new(),
                     }),
@@ -208,10 +214,10 @@ impl CodeGraph {
         let mut updates = Vec::new();
         for line in grafo.instructions_unordered() {
             match &line.instruction {
-                Instruction::CHPR(label)=>{
+                Instruction::CHPR(label) => {
                     updates.push((label.unwrap(), line.address));
-                },
-                _=>()
+                }
+                _ => (),
             }
         }
         for (label, address) in updates {
@@ -227,20 +233,21 @@ impl CodeGraph {
 
         grafo
     }
-    
-    pub fn mapear_memoria(&mut self){
+
+    pub fn mapear_memoria(&mut self) {
         self.memoria_consistente = true;
         let mut bases_mapeamento: Vec<(usize, usize)> = self
             .funcoes
             .iter()
-            .map(|func| (func.addr_inicio,  1)) // este +1 é para contar com a memoria alocada por CHPR
-            .chain(std::iter::once((0,0))).rev()
+            .map(|func| (func.addr_inicio, 1)) // este +1 é para contar com a memoria alocada por CHPR
+            .chain(std::iter::once((0, 0)))
+            .rev()
             .collect();
 
         // origem, endereco
-        let mut atribuicoes_globais:HashSet<(usize, usize)> = HashSet::new();
-        let mut usos_globais:HashSet<(usize, usize)> = HashSet::new();
-        let mut referencias_globais:HashSet<(usize, usize)> = HashSet::new();
+        let mut atribuicoes_globais: HashSet<(usize, usize)> = HashSet::new();
+        let mut usos_globais: HashSet<(usize, usize)> = HashSet::new();
+        let mut referencias_globais: HashSet<(usize, usize)> = HashSet::new();
 
         while let Some((addr, initial_value)) = bases_mapeamento.pop() {
             let raiz = self.locate_address(addr).unwrap();
@@ -256,14 +263,14 @@ impl CodeGraph {
             let mut nodes_stack = Vec::with_capacity(self.grafo.node_count());
             nodes_stack.push(raiz);
             let mut visited_nodes = Vec::with_capacity(self.grafo.node_count());
-    
+
             // let mut dfs = Dfs::new(&self.grafo, raiz);
-    
+
             let mut alocation_stack: Vec<Allocation> = Vec::new();
             // (addr, aloc)
             let mut alocation_map = Vec::new();
-    
-            while let Some(visited) = nodes_stack.pop() {                
+
+            while let Some(visited) = nodes_stack.pop() {
                 let lines = if visited == raiz {
                     let lines = self.grafo.node_weight_mut(visited).unwrap();
                     let first_addr = lines[0].address;
@@ -271,11 +278,14 @@ impl CodeGraph {
                 } else {
                     self.grafo.node_weight_mut(visited).unwrap()
                 };
-                let mut memory:usize = lines.first().unwrap().initial_memory_usage.unwrap();
+                let mut memory: usize = lines.first().unwrap().initial_memory_usage.unwrap();
                 for line_idx in 0..lines.len() {
-                    println!("\n{}: {}",lines[line_idx].address, lines[line_idx].instruction);
+                    println!(
+                        "\n{}: {}",
+                        lines[line_idx].address, lines[line_idx].instruction
+                    );
                     println!("alocation_stack:");
-                    for a in &alocation_stack{
+                    for a in &alocation_stack {
                         println!("{}: {}", a.addr, a.nivel_memoria + a.variaveis.len());
                     }
                     println!("");
@@ -286,100 +296,125 @@ impl CodeGraph {
                         | Instruction::LEIT
                         | Instruction::ENPR(_) => 1,
                         Instruction::CRVL(nivel_lexico, nivel_memoria) => {
-                            println!("{:?}",lines[line_idx]);
-                            if *nivel_lexico==1{
-                                if let Some(func_idx) = current_func{
+                            println!("{:?}", lines[line_idx]);
+                            if *nivel_lexico == 1 {
+                                if let Some(func_idx) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real<0{
-                                        self.funcoes[func_idx].uso_memoria_externa.insert(endereco_real);
-                                    }
-                                    else{
-                                        println!("Procurando qnd o nivel chega de novo a {}",endereco_real);
+                                    if endereco_real < 0 {
+                                        self.funcoes[func_idx]
+                                            .uso_memoria_externa
+                                            .insert(endereco_real);
+                                    } else {
+                                        println!(
+                                            "Procurando qnd o nivel chega de novo a {}",
+                                            endereco_real
+                                        );
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                            println!("item: {}",item.nivel_memoria);
-                                            let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                            println!("item: {}", item.nivel_memoria);
+                                            let endereco_relativo =
+                                                endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                item.variaveis[endereco_relativo as usize].usos.insert(lines[line_idx].address);
+                                                item.variaveis[endereco_relativo as usize]
+                                                    .usos
+                                                    .insert(lines[line_idx].address);
                                                 true
                                             } else {
                                                 false
                                             }
                                         });
-                                        if !achou
-                                        {
+                                        if !achou {
                                             self.memoria_consistente = false;
                                             return;
                                         }
                                     }
-                                }else{
-                                    panic!("Instrução em escopo global tentou acessar nivel lexico {}",nivel_lexico);
+                                } else {
+                                    panic!(
+                                        "Instrução em escopo global tentou acessar nivel lexico {}",
+                                        nivel_lexico
+                                    );
                                 }
+                            } else {
+                                usos_globais
+                                    .insert((lines[line_idx].address, *nivel_memoria as usize));
                             }
-                            else{
-                                usos_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
-                            }
-                        1},
-                        | Instruction::CREN(nivel_lexico, nivel_memoria)=>{
-                            if *nivel_lexico==1{
-                                if let Some(func_idx) = current_func{
+                            1
+                        }
+                        Instruction::CREN(nivel_lexico, nivel_memoria) => {
+                            if *nivel_lexico == 1 {
+                                if let Some(func_idx) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real<0{
-                                        self.funcoes[func_idx].referencias_memoria_externa.insert(endereco_real);
-                                    }
-                                    else{
+                                    if endereco_real < 0 {
+                                        self.funcoes[func_idx]
+                                            .referencias_memoria_externa
+                                            .insert(endereco_real);
+                                    } else {
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                            let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                            let endereco_relativo =
+                                                endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                item.variaveis[endereco_relativo as usize].referencias.insert(lines[line_idx].address);
+                                                item.variaveis[endereco_relativo as usize]
+                                                    .referencias
+                                                    .insert(lines[line_idx].address);
                                                 true
                                             } else {
                                                 false
                                             }
                                         });
-                                        if !achou{
+                                        if !achou {
                                             self.memoria_consistente = false;
                                             return;
                                         }
                                     }
-                                }else{
-                                    panic!("Instrução em escopo global tentou acessar nivel lexico {}",nivel_lexico);
+                                } else {
+                                    panic!(
+                                        "Instrução em escopo global tentou acessar nivel lexico {}",
+                                        nivel_lexico
+                                    );
                                 }
+                            } else {
+                                referencias_globais
+                                    .insert((lines[line_idx].address, *nivel_memoria as usize));
                             }
-                            else{
-                                referencias_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
-                            }
-                        1}
-                        Instruction::ARMZ(nivel_lexico, nivel_memoria) =>{          
-                            if *nivel_lexico==1{
-                                if let Some(func_idx) = current_func{
+                            1
+                        }
+                        Instruction::ARMZ(nivel_lexico, nivel_memoria) => {
+                            if *nivel_lexico == 1 {
+                                if let Some(func_idx) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real<0{
-                                        self.funcoes[func_idx].atribuicao_memoria_externa.insert(endereco_real);
-                                    }
-                                    else{
+                                    if endereco_real < 0 {
+                                        self.funcoes[func_idx]
+                                            .atribuicao_memoria_externa
+                                            .insert(endereco_real);
+                                    } else {
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                            let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                            let endereco_relativo =
+                                                endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                item.variaveis[endereco_relativo as usize].atribuicoes.insert(lines[line_idx].address);
+                                                item.variaveis[endereco_relativo as usize]
+                                                    .atribuicoes
+                                                    .insert(lines[line_idx].address);
                                                 true
                                             } else {
                                                 false
                                             }
                                         });
-                                        if !achou{
+                                        if !achou {
                                             self.memoria_consistente = false;
                                             return;
                                         }
                                     }
-                                }else{
-                                    panic!("Instrução em escopo global tentou acessar nivel lexico {}",nivel_lexico);
+                                } else {
+                                    panic!(
+                                        "Instrução em escopo global tentou acessar nivel lexico {}",
+                                        nivel_lexico
+                                    );
                                 }
-                            }   
-                            else{
-                                atribuicoes_globais.insert((lines[line_idx].address, *nivel_memoria as usize));
+                            } else {
+                                atribuicoes_globais
+                                    .insert((lines[line_idx].address, *nivel_memoria as usize));
                             }
                             -1
-                        },
+                        }
                         //operadores de dois args
                         Instruction::SOMA
                         | Instruction::SUBT
@@ -392,30 +427,30 @@ impl CodeGraph {
                         | Instruction::CMIG
                         | Instruction::CMDG
                         | Instruction::CMEG
-                        | Instruction::CMAG =>{
+                        | Instruction::CMAG => {
                             //registra atribuição ao primeiro argumento
                             let endereco_real = memory as i32 - 2;
                             let achou = alocation_stack.iter_mut().rev().any(|item| {
                                 let endereco_relativo = endereco_real - item.nivel_memoria as i32;
                                 if endereco_relativo >= 0 {
-                                    item.variaveis[endereco_relativo as usize].atribuicoes.insert(lines[line_idx].address);
+                                    item.variaveis[endereco_relativo as usize]
+                                        .atribuicoes
+                                        .insert(lines[line_idx].address);
                                     true
                                 } else {
                                     false
                                 }
                             });
-                            if !achou{
+                            if !achou {
                                 self.memoria_consistente = false;
                                 return;
                             }
                             -1
                         }
-                        Instruction::ARMI(_, _)
-                        | Instruction::DSVF(_)
-                        | Instruction::IMPR => -1,
+                        Instruction::ARMI(_, _) | Instruction::DSVF(_) | Instruction::IMPR => -1,
                         Instruction::AMEM(n) => *n,
                         Instruction::DMEM(n) => -n,
-                        Instruction::RTPR(_, _n) => - 2, // ignora o 'n' para só ser considerado na chamada
+                        Instruction::RTPR(_, _n) => -2, // ignora o 'n' para só ser considerado na chamada
                         Instruction::CHPR(k) => {
                             //locate the function
                             -(self
@@ -428,22 +463,25 @@ impl CodeGraph {
                         _ => 0,
                     };
                     // verifica se memoria total não será negativa, caso que invalida mapeamento
-                    if memory_delta < 0 && memory < (-memory_delta) as usize { 
+                    if memory_delta < 0 && memory < (-memory_delta) as usize {
                         self.memoria_consistente = false;
                         return;
-                    } 
+                    }
                     memory = (memory as i32 + memory_delta) as usize;
                     if memory_delta > 0 {
-                        alocation_stack.push(Allocation::new(lines[line_idx].address, memory_delta as usize, memory-memory_delta as usize));
+                        alocation_stack.push(Allocation::new(
+                            lines[line_idx].address,
+                            memory_delta as usize,
+                            memory - memory_delta as usize,
+                        ));
                     } else if memory_delta < 0 {
-                        
                         // se for uma desaloc que usa o valor, adiciona como uso
                         match &lines[line_idx].instruction {
-                            Instruction::DMEM(_) | Instruction::RTPR(_, _)=>(),
-                            _=>{
+                            Instruction::DMEM(_) | Instruction::RTPR(_, _) => (),
+                            _ => {
                                 if let Some(item) = alocation_stack.iter_mut().last() {
                                     item.variaveis[0].usos.insert(lines[line_idx].address);
-                                }else{
+                                } else {
                                     self.memoria_consistente = false;
                                     return;
                                 }
@@ -454,42 +492,58 @@ impl CodeGraph {
                         let mut a_liberar = memory_delta.abs();
                         while let Some(top) = alocation_stack.pop() {
                             // se ainda pode liberar mais
-                            if a_liberar>0{
+                            if a_liberar > 0 {
                                 a_liberar -= top.variaveis.len() as i32;
-                                
+
                                 let mut aloc = top.liberate(lines[line_idx].address);
 
                                 // se for uma variavel global
-                                if let None = current_func{
+                                if let None = current_func {
                                     usos_globais.retain(|&(addr_causador, nivel_memoria)| {
-                                        if nivel_memoria >= memory && nivel_memoria <= memory+aloc.variaveis.len() {
-                                            aloc.variaveis[nivel_memoria-memory].usos.insert(addr_causador);
+                                        if nivel_memoria >= memory
+                                            && nivel_memoria <= memory + aloc.variaveis.len()
+                                        {
+                                            aloc.variaveis[nivel_memoria - memory]
+                                                .usos
+                                                .insert(addr_causador);
                                             false
                                         } else {
                                             true
                                         }
                                     });
-                                    atribuicoes_globais.retain(|&(addr_causador, nivel_memoria)| {
-                                        if nivel_memoria >= memory && nivel_memoria <= memory+aloc.variaveis.len() {
-                                            aloc.variaveis[nivel_memoria-memory].atribuicoes.insert(addr_causador);
-                                            false
-                                        } else {
-                                            true
-                                        }
-                                    });
-                                    referencias_globais.retain(|&(addr_causador, nivel_memoria)| {
-                                        if nivel_memoria >= memory && nivel_memoria <= memory+aloc.variaveis.len() {
-                                            aloc.variaveis[nivel_memoria-memory].referencias.insert(addr_causador);
-                                            false
-                                        } else {
-                                            true
-                                        }
-                                    });
+                                    atribuicoes_globais.retain(
+                                        |&(addr_causador, nivel_memoria)| {
+                                            if nivel_memoria >= memory
+                                                && nivel_memoria <= memory + aloc.variaveis.len()
+                                            {
+                                                aloc.variaveis[nivel_memoria - memory]
+                                                    .atribuicoes
+                                                    .insert(addr_causador);
+                                                false
+                                            } else {
+                                                true
+                                            }
+                                        },
+                                    );
+                                    referencias_globais.retain(
+                                        |&(addr_causador, nivel_memoria)| {
+                                            if nivel_memoria >= memory
+                                                && nivel_memoria <= memory + aloc.variaveis.len()
+                                            {
+                                                aloc.variaveis[nivel_memoria - memory]
+                                                    .referencias
+                                                    .insert(addr_causador);
+                                                false
+                                            } else {
+                                                true
+                                            }
+                                        },
+                                    );
                                 }
 
                                 alocation_map.push(aloc);
 
-                                if a_liberar<0{                                    
+                                if a_liberar < 0 {
                                     self.memoria_consistente = false;
                                     return;
                                 }
@@ -506,7 +560,8 @@ impl CodeGraph {
                         lines[line_idx + 1].initial_memory_usage = Some(memory as usize);
                     }
                 }
-                let neighbors: Vec<NodeIndex> = self.grafo.neighbors(visited).map(|n| n.clone()).collect();
+                let neighbors: Vec<NodeIndex> =
+                    self.grafo.neighbors(visited).map(|n| n.clone()).collect();
                 // Propaga para os vizinhos
                 for neighbor_index in neighbors.iter() {
                     let neighbor = self
@@ -527,12 +582,15 @@ impl CodeGraph {
 
                 visited_nodes.push(visited);
 
-                let mut neighbors:Vec<NodeIndex> = self.grafo.neighbors(visited).into_iter().collect();
+                let mut neighbors: Vec<NodeIndex> =
+                    self.grafo.neighbors(visited).into_iter().collect();
 
                 // faz antes nodes que voltam ao atual
-                neighbors.sort_by_key(|&n| petgraph::algo::has_path_connecting(&self.grafo, n, visited, None));
-                
-                for neighbor_index in neighbors{
+                neighbors.sort_by_key(|&n| {
+                    petgraph::algo::has_path_connecting(&self.grafo, n, visited, None)
+                });
+
+                for neighbor_index in neighbors {
                     //propaga valores de memoria
                     let neighbor = self
                         .grafo
@@ -547,12 +605,14 @@ impl CodeGraph {
                         }
                     }
                     neighbor.initial_memory_usage = Some(memory as usize);
-                    if !visited_nodes.contains(&neighbor_index) && !nodes_stack.contains(&neighbor_index){
+                    if !visited_nodes.contains(&neighbor_index)
+                        && !nodes_stack.contains(&neighbor_index)
+                    {
                         nodes_stack.push(neighbor_index);
                     }
                 }
             }
-    
+
             for aloc in alocation_map {
                 let addr = aloc.addr;
                 self.instruction_mut(addr).unwrap().allocation = Some(aloc);
@@ -563,11 +623,11 @@ impl CodeGraph {
     pub fn mapear_memoria_a_partir_de(&mut self, _addr: usize, _initial_value: usize) -> bool {
         panic!("Talvez implementar isso depois");
     }
-    
+
     pub fn locate_address(&self, addr: usize) -> Option<NodeIndex> {
         self.grafo.node_indices().find(|&output_index| {
             if let Some(lines) = self.grafo.node_weight(output_index) {
-                lines.iter().any(|line|line.address==addr)
+                lines.iter().any(|line| line.address == addr)
             } else {
                 false
             }
@@ -602,8 +662,14 @@ impl CodeGraph {
             .flat_map(|node_instructions| node_instructions.iter())
     }
 
-    pub fn get_fn_index(&self, addr:usize)->Option<usize>{
-        self.funcoes.iter().enumerate().find_map(|(i, f)| if addr >= f.addr_inicio && addr<=f.addr_retorno{Some(i)}else{None})
+    pub fn get_fn_index(&self, addr: usize) -> Option<usize> {
+        self.funcoes.iter().enumerate().find_map(|(i, f)| {
+            if addr >= f.addr_inicio && addr <= f.addr_retorno {
+                Some(i)
+            } else {
+                None
+            }
+        })
     }
 
     //falta incluir mudança de contagem de chamadas de funcao
@@ -612,8 +678,10 @@ impl CodeGraph {
     // }
 
     pub fn remove_instruction_controlled(&mut self, addr: usize, remap: bool) {
-        if remap && self.memoria_consistente{
-            if let Some(memory_usage_before) = self.instruction_mut(addr).unwrap().initial_memory_usage {
+        if remap && self.memoria_consistente {
+            if let Some(memory_usage_before) =
+                self.instruction_mut(addr).unwrap().initial_memory_usage
+            {
                 //remapeia instrucoes atingiveis por esta, considerando que ela não vai mais afetar a execucao
                 self.mapear_memoria_a_partir_de(addr + 1, memory_usage_before);
             }
@@ -640,7 +708,7 @@ impl CodeGraph {
                 }
                 _ => {}
             }
-        }        
+        }
 
         // transformacoes especificas
         match line.instruction {
@@ -755,49 +823,59 @@ impl CodeGraph {
     pub fn to_mepa_code(self) -> MepaCode {
         // Collect all instructions from all nodes into a single Vec
         let mut instructions: Vec<InstructionAndMetadata> = self
-            .grafo.into_nodes_edges().0.into_iter().flat_map(|node| node.weight.into_iter())
+            .grafo
+            .into_nodes_edges()
+            .0
+            .into_iter()
+            .flat_map(|node| node.weight.into_iter())
             .collect();
-    
+
         // Sort instructions by address
         instructions.sort_by_key(|instr| instr.address);
-    
+
         // First, collect the positions of the labels in an immutable context
-        let label_positions: Vec<(usize, usize)> = instructions.iter()
+        let label_positions: Vec<(usize, usize)> = instructions
+            .iter()
             .enumerate()
-            .filter_map(|(i, instr)| {
-                match &instr.instruction {
-                    Instruction::DSVS(label) |
-                    Instruction::DSVF(label) |
-                    Instruction::CHPR(label) => Some((i, label.unwrap())),
-                    _ => None,
+            .filter_map(|(i, instr)| match &instr.instruction {
+                Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label) => {
+                    Some((i, label.unwrap()))
                 }
+                _ => None,
             })
-            .map(|(i, label)| (i, instructions.iter().position(|l| l.address == label).unwrap()))
+            .map(|(i, label)| {
+                (
+                    i,
+                    instructions
+                        .iter()
+                        .position(|l| l.address == label)
+                        .unwrap(),
+                )
+            })
             .map(|(i, pos)| (i, pos))
             .collect();
-    
+
         // Then, update the labels in a mutable context
         for (i, pos) in label_positions {
             match &mut instructions[i].instruction {
-                Instruction::DSVS(label) |
-                Instruction::DSVF(label) |
-                Instruction::CHPR(label) => {
+                Instruction::DSVS(label) | Instruction::DSVF(label) | Instruction::CHPR(label) => {
                     *label = Label::Literal(pos);
                 }
                 _ => (),
             }
         }
-    
+
         // Return the sorted Vec
         MepaCode::from(instructions.into_iter().map(|line| line.instruction))
     }
 
-    pub fn allocations(&self) -> impl Iterator<Item = &Allocation>{
-        self.instructions_unordered().filter_map(|i|i.allocation.as_ref())
+    pub fn allocations(&self) -> impl Iterator<Item = &Allocation> {
+        self.instructions_unordered()
+            .filter_map(|i| i.allocation.as_ref())
     }
 
     pub fn print_vars(&self) {
-        if self.memoria_consistente{
+        if self.memoria_consistente {
             for aloc in self.allocations() {
                 println!("───────────────┬───────────────────────────────");
                 println!(
@@ -808,27 +886,39 @@ impl CodeGraph {
                 println!("─────┬─────────┴──┬─────────────┬──────────────");
                 println!("Item │ Usos       │ Atribuições │ Referências ");
                 println!("─────┼────────────┼─────────────┼──────────────");
-        
+
                 for (i, var) in aloc.variaveis.iter().enumerate() {
-                    let usos = var.usos.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-                    let atribuicoes = var.atribuicoes.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-                    let referencias = var.referencias.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-        
+                    let usos = var
+                        .usos
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let atribuicoes = var
+                        .atribuicoes
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let referencias = var
+                        .referencias
+                        .iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+
                     println!(
                         "{:<4} │ {:<10} │ {:<11} │ {:<12}",
                         i, usos, atribuicoes, referencias
                     );
                 }
-        
+
                 println!("─────┴────────────┴─────────────┴──────────────");
             }
-        }
-        else {
+        } else {
             println!("Memoria inconsistente: não é possível imprimir uso de memória");
         }
     }
-    
-    
 
     pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
         if let Some(parent) = filename.parent() {
@@ -843,7 +933,7 @@ impl CodeGraph {
             let linhas_de_mepa: Vec<String> = instructions
                 .iter()
                 .map(|linha| {
-                    if self.memoria_consistente{
+                    if self.memoria_consistente {
                         format!(
                             "[{}] {}: {}{}",
                             linha.initial_memory_usage.unwrap(),
@@ -852,19 +942,32 @@ impl CodeGraph {
                             if let Some(aloc) = &linha.allocation {
                                 format!(
                                     " ({} | {} | {} | {})",
-                                    aloc.variaveis.iter().flat_map(|s| &s.atribuicoes).map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.variaveis.iter().flat_map(|s| &s.usos).map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.variaveis.iter().flat_map(|s| &s.referencias).map(|x| x.to_string()).collect::<Vec<_>>().join(", "), aloc.liberation_address.unwrap()
+                                    aloc.variaveis
+                                        .iter()
+                                        .flat_map(|s| &s.atribuicoes)
+                                        .map(|x| x.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", "),
+                                    aloc.variaveis
+                                        .iter()
+                                        .flat_map(|s| &s.usos)
+                                        .map(|x| x.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", "),
+                                    aloc.variaveis
+                                        .iter()
+                                        .flat_map(|s| &s.referencias)
+                                        .map(|x| x.to_string())
+                                        .collect::<Vec<_>>()
+                                        .join(", "),
+                                    aloc.liberation_address.unwrap()
                                 )
                             } else {
                                 "".to_string()
                             }
                         )
-                    }
-                    else {
-                        format!(
-                            "{}: {}",
-                            linha.address,
-                            linha.instruction
-                        )
+                    } else {
+                        format!("{}: {}", linha.address, linha.instruction)
                     }
                 })
                 .collect();
@@ -890,7 +993,7 @@ impl CodeGraph {
 
         // adiciona legenda
         if let Some(pos) = processed_dot.rfind('}') {
-            processed_dot.insert_str(pos, 
+            processed_dot.insert_str(pos,
                 if self.memoria_consistente{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA\\naddr: instrução (atribuições | usos | referências | addr de dealoc)\"]\n"}
                 else{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA (caso: memória inconsistente)\\naddr: instrução\"]\n"});
         }

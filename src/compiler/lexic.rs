@@ -115,7 +115,7 @@ impl Reader {
         };
     }
 
-    pub fn get_next_token(&mut self, line:usize) -> Result<(Option<Token>, usize), CompileError> {
+    pub fn get_next_token(&mut self, line: usize) -> Result<(Option<Token>, usize), CompileError> {
         //skip whitespaces
         loop {
             if let Some(c) = self.next_char {
@@ -164,7 +164,8 @@ impl Reader {
                                     }
                                 } else {
                                     return Err(CompileError::Lexic(
-                                        "Comentário multi-linhas inacabado no fim do arquivo".to_owned(),
+                                        "Comentário multi-linhas inacabado no fim do arquivo"
+                                            .to_owned(),
                                     ));
                                 }
                             }
@@ -197,7 +198,10 @@ impl Reader {
                             self.consume_char();
                             Ok((Some(Token::Or), self.current_line))
                         } else {
-                            Err(CompileError::Lexic(format!("Esperava '|', obteve '{}' na linha {}", c, line)))
+                            Err(CompileError::Lexic(format!(
+                                "Esperava '|', obteve '{}' na linha {}",
+                                c, line
+                            )))
                         }
                     }
                     //or
@@ -259,7 +263,10 @@ impl Reader {
                                 Ok((Some(Token::Identifier(s)), self.current_line))
                             }
                         } else {
-                            Err(CompileError::Lexic(format!("Char inesperado: '{}' na linha {}", c, line)))
+                            Err(CompileError::Lexic(format!(
+                                "Char inesperado: '{}' na linha {}",
+                                c, line
+                            )))
                         }
                     }
                 }
@@ -286,12 +293,11 @@ impl Lexic {
         }
 
         list = list.into_iter().rev().collect();
-        let line = list.last()
-        .ok_or_else(|| CompileError::Lexic("Arquivo sem tokens".to_owned()))?.1;
-        Ok(Lexic(
-            list,
-            line
-        ))
+        let line = list
+            .last()
+            .ok_or_else(|| CompileError::Lexic("Arquivo sem tokens".to_owned()))?
+            .1;
+        Ok(Lexic(list, line))
     }
 
     pub fn next(&self) -> Option<&Token> {
@@ -310,8 +316,8 @@ impl Lexic {
         match self.0.pop() {
             Some((t, l)) => {
                 self.1 = match self.0.last() {
-                    Some(last)=>last.1,
-                    None => l
+                    Some(last) => last.1,
+                    None => l,
                 };
                 Ok(t)
             }

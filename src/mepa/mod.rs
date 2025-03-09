@@ -1,3 +1,3 @@
-pub mod label;
-pub mod instruction;
 pub mod code;
+pub mod instruction;
+pub mod label;

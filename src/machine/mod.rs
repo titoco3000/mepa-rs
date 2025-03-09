@@ -1,32 +1,40 @@
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
-use crate::utils::{print_matrix, input_i32};
+use crate::utils::{input_i32, print_matrix};
 
-use std::{io::{self, BufReader, Read}, path::PathBuf};
+use std::{
+    io::{self, BufReader, Read},
+    path::PathBuf,
+};
 
 enum InputSource {
     Vec(Vec<i32>),
     Readable(Box<dyn Read>),
-    Stdin
+    Stdin,
 }
 impl InputSource {
     pub fn readable<R: Read + 'static>(readable: R) -> Self {
         InputSource::Readable(Box::new(readable))
     }
     pub fn read(&mut self) -> Option<i32> {
-        match self {            
-            Self::Vec(v) => if v.len()>1 {v.pop()}else{v.get(0).copied()},
-            
-            Self::Stdin => {
-                Some(input_i32())
+        match self {
+            Self::Vec(v) => {
+                if v.len() > 1 {
+                    v.pop()
+                } else {
+                    v.get(0).copied()
+                }
             }
-            
+
+            Self::Stdin => Some(input_i32()),
+
             Self::Readable(readable) => {
                 let mut buf_reader = BufReader::new(readable);
                 let mut buffer = String::new();
 
                 if buf_reader.read_to_string(&mut buffer).is_ok() {
-                    buffer.split_whitespace()
+                    buffer
+                        .split_whitespace()
                         .next()
                         .and_then(|s| s.parse::<i32>().ok())
                 } else {
@@ -64,7 +72,7 @@ impl<'a> MepaMachine<'a> {
             output: None,
         }
     }
-    pub fn add_input_vec(mut self, input:Vec<i32>) -> Self{
+    pub fn add_input_vec(mut self, input: Vec<i32>) -> Self {
         self.input = InputSource::Vec(input);
         self
     }
@@ -112,7 +120,7 @@ impl<'a> MepaMachine<'a> {
             }
 
             v.push(if let Some(value) = self.d.get(j) {
-                    value.to_string()
+                value.to_string()
             } else {
                 "".to_string()
             });
@@ -314,7 +322,7 @@ impl<'a> MepaMachine<'a> {
                     self.i = 1;
                 }
                 Instruction::CHPR(p) => {
-                    self.s+=1;
+                    self.s += 1;
                     self.m[self.s as usize] = self.i as i32 + 1;
                     self.i = p.locate(&self.code).unwrap();
                 }
@@ -336,19 +344,18 @@ impl<'a> MepaMachine<'a> {
         }
     }
 
-    pub fn execute(&mut self)-> Result<(), String>{
-        while !self.ended() {            
+    pub fn execute(&mut self) -> Result<(), String> {
+        while !self.ended() {
             self.execute_step()?;
         }
         Ok(())
-    }    
-    
+    }
 }
 
-pub fn interactive_execution(filename: &PathBuf, input:Vec<i32>) {
+pub fn interactive_execution(filename: &PathBuf, input: Vec<i32>) {
     let mc = MepaCode::from_file(filename).unwrap();
     let mut machine = MepaMachine::new(mc);
-    if input.len()>0{
+    if input.len() > 0 {
         machine = machine.add_input_vec(input);
     }
     let mut input_line = String::new();
@@ -364,10 +371,10 @@ pub fn interactive_execution(filename: &PathBuf, input:Vec<i32>) {
     println!("Program executed successfully");
 }
 
-pub fn execute(filename: &PathBuf, input:Vec<i32>) {
+pub fn execute(filename: &PathBuf, input: Vec<i32>) {
     let mc = MepaCode::from_file(filename).unwrap();
     let mut machine = MepaMachine::new(mc);
-    if input.len()>0{
+    if input.len() > 0 {
         machine = machine.add_input_vec(input);
     }
     machine.execute().unwrap();

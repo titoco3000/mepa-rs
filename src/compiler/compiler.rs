@@ -98,7 +98,7 @@ impl Compiler {
 
             self.commands()?;
 
-            if is_token!(self.tokens.next(), Token::Return){
+            if is_token!(self.tokens.next(), Token::Return) {
                 self.tokens.consume()?;
                 self.expression()?;
                 ensure_is_token!(
@@ -107,10 +107,8 @@ impl Compiler {
                     self.tokens.current_line()
                 );
                 self.tokens.consume()?;
-            }
-            else{
-                self.generated_code
-                .insert((None, Instruction::CRCT(0)));
+            } else {
+                self.generated_code.insert((None, Instruction::CRCT(0)));
             }
             //store at reserved return position
             self.generated_code
@@ -293,7 +291,7 @@ impl Compiler {
                 v.push((if is_array { VarType::Array } else { var_type }, s, size));
             }
             need_to_find_identifier = is_token!(self.tokens.next(), Token::Comma);
-            if need_to_find_identifier{
+            if need_to_find_identifier {
                 self.tokens.consume()?;
             }
         }
@@ -500,21 +498,18 @@ impl Compiler {
     fn command(&mut self) -> Result<(), CompileError> {
         if is_token!(self.tokens.next(), Token::OpenBraces) {
             self.command_block()?;
-        } 
-        else if is_token!(self.tokens.next(), Token::Asterisc){
+        } else if is_token!(self.tokens.next(), Token::Asterisc) {
             self.attribuition()?;
             ensure_is_token!(
                 self.tokens.next(),
                 Token::SemiColon,
                 self.tokens.current_line()
             );
-        }
-        else if is_token!(self.tokens.next(), Token::Identifier(_))
-        {
-            if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis){
+        } else if is_token!(self.tokens.next(), Token::Identifier(_)) {
+            if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis) {
                 self.function_call()?;
                 self.generated_code.insert((None, Instruction::DMEM(1)));
-            }else{
+            } else {
                 self.attribuition()?;
                 ensure_is_token!(
                     self.tokens.next(),
@@ -962,16 +957,19 @@ impl Compiler {
     }
 }
 
-pub fn compile(origin: &PathBuf, target: &PathBuf, otimizar:bool) -> Result<io::Result<()>, CompileError> {
+pub fn compile(
+    origin: &PathBuf,
+    target: &PathBuf,
+    otimizar: bool,
+) -> Result<io::Result<()>, CompileError> {
     let mut c = Compiler::new(origin)?;
     c.program()?;
     println!("Compilado com sucesso!");
-    if otimizar{
+    if otimizar {
         let otimizado = otimizador::otimizar(c.generated_code);
         println!("Otimizado com sucesso!");
         Ok(otimizado.to_file(target))
-    }
-    else{
+    } else {
         Ok(c.generated_code.to_file(target))
     }
 }

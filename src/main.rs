@@ -1,4 +1,8 @@
-use mepa_rs::{compiler::{compile, CompileError}, machine, otimizador::otimizar_arquivo};
+use mepa_rs::{
+    compiler::{compile, CompileError},
+    machine,
+    otimizador::otimizar_arquivo,
+};
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
@@ -8,8 +12,10 @@ const DEBUG: bool = true;
 fn main() {
     if DEBUG {
         let output_path = PathBuf::from("output/simple.mepa");
-        compile(&PathBuf::from("samples/ipt/simple.ipt"), &output_path, true).unwrap().unwrap();
-        // machine::interactive_execution(&output_path, vec![]);        
+        compile(&PathBuf::from("samples/ipt/simple.ipt"), &output_path, true)
+            .unwrap()
+            .unwrap();
+        // machine::interactive_execution(&output_path, vec![]);
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")
@@ -156,9 +162,9 @@ fn handle_action(
                     Err(e) => println!("Erro de IO: {:?}", e),
                 },
                 Err(e) => match e {
-                    CompileError::Lexic(s)=>println!("Erro léxico: {}",s),
-                    CompileError::Sintatic(s)=>println!("Erro sintático: {}",s),
-                    CompileError::Semantic(s)=>println!("Erro semântico: {}",s),
+                    CompileError::Lexic(s) => println!("Erro léxico: {}", s),
+                    CompileError::Sintatic(s) => println!("Erro sintático: {}", s),
+                    CompileError::Semantic(s) => println!("Erro semântico: {}", s),
                 },
             }
         }
