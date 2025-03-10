@@ -249,10 +249,10 @@ impl CodeGraph {
 
                     let memory_delta = match &lines[line_idx].instruction {
                         Instruction::CRCT(_)
-                        | Instruction::CRVI(_, _)
                         | Instruction::LEIT
                         | Instruction::ENPR(_) => 1,
-                        Instruction::CRVL(nivel_lexico, nivel_memoria) => {
+                        Instruction::CRVL(nivel_lexico, nivel_memoria)
+                        |Instruction::CRVI(nivel_lexico, nivel_memoria) => {
                             println!("{:?}", lines[line_idx]);
                             if *nivel_lexico == 1 {
                                 if let Some(_) = current_func {
@@ -392,7 +392,47 @@ impl CodeGraph {
                             }
                             -1
                         }
-                        Instruction::ARMI(_, _) | Instruction::DSVF(_) | Instruction::IMPR => -1,
+                        Instruction::ARMI(nivel_lexico, nivel_memoria) => {
+                            println!("{:?}", lines[line_idx]);
+                            if *nivel_lexico == 1 {
+                                if let Some(_) = current_func {
+                                    let endereco_real = nivel_memoria + 2;
+                                    if endereco_real >= 0 {
+                                        println!(
+                                            "Procurando qnd o nivel chega de novo a {}",
+                                            endereco_real
+                                        );
+                                        let achou = alocation_stack.iter_mut().rev().any(|item| {
+                                            println!("item: {}", item.nivel_memoria);
+                                            let endereco_relativo =
+                                                endereco_real - item.nivel_memoria as i32;
+                                            if endereco_relativo >= 0 {
+                                                item.variaveis[endereco_relativo as usize]
+                                                    .usos
+                                                    .insert(lines[line_idx].address);
+                                                true
+                                            } else {
+                                                false
+                                            }
+                                        });
+                                        if !achou {
+                                            self.memoria_consistente = false;
+                                            return;
+                                        }
+                                    }
+                                } else {
+                                    panic!(
+                                        "Instrução em escopo global tentou acessar nivel lexico {}",
+                                        nivel_lexico
+                                    );
+                                }
+                            } else {
+                                usos_globais
+                                    .insert((lines[line_idx].address, *nivel_memoria as usize));
+                            }
+                            -1
+                        }
+                        Instruction::DSVF(_) | Instruction::IMPR => -1,
                         Instruction::AMEM(n) => *n,
                         Instruction::DMEM(n) => -n,
                         Instruction::RTPR(_, _n) => -2, // ignora o 'n' para só ser considerado na chamada
