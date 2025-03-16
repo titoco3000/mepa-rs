@@ -61,6 +61,9 @@ pub struct InstructionAndMetadata {
     pub instruction: Instruction,
     pub initial_memory_usage: Option<usize>,
     pub allocation: Option<Allocation>,
+    pub armazena_em: Option<(usize, usize)>, //addr de alocacao, addr da variavel
+    pub carrega_de: Option<(usize, usize)>,
+    pub ref_de: Option<(usize, usize)>,
 }
 #[derive(Debug, Clone)]
 pub struct FuncMetadata {
@@ -129,6 +132,9 @@ impl CodeGraph {
                         instruction: code[addr].1.clone(),
                         initial_memory_usage: None,
                         allocation: None,
+                        carrega_de: None,
+                        armazena_em: None,
+                        ref_de: None,
                     })
                     .collect();
                 grafo.grafo.add_node(instructions)
@@ -190,7 +196,7 @@ impl CodeGraph {
 
     pub fn mapear_memoria(&mut self) {
         self.mapear_funcoes();
-        if !self.memoria_consistente{
+        if !self.memoria_consistente {
             return;
         }
         let mut bases_mapeamento: Vec<(usize, usize)> = self
@@ -248,11 +254,9 @@ impl CodeGraph {
                     println!("");
 
                     let memory_delta = match &lines[line_idx].instruction {
-                        Instruction::CRCT(_)
-                        | Instruction::LEIT
-                        | Instruction::ENPR(_) => 1,
+                        Instruction::CRCT(_) | Instruction::LEIT | Instruction::ENPR(_) => 1,
                         Instruction::CRVL(nivel_lexico, nivel_memoria)
-                        |Instruction::CRVI(nivel_lexico, nivel_memoria) => {
+                        | Instruction::CRVI(nivel_lexico, nivel_memoria) => {
                             println!("{:?}", lines[line_idx]);
                             if *nivel_lexico == 1 {
                                 if let Some(_) = current_func {
@@ -267,6 +271,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
+                                                lines[line_idx].carrega_de =
+                                                    Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .usos
                                                     .insert(lines[line_idx].address);
@@ -296,11 +302,13 @@ impl CodeGraph {
                             if *nivel_lexico == 1 {
                                 if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
-                                    if endereco_real >= 0{
+                                    if endereco_real >= 0 {
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
+                                                lines[line_idx].ref_de =
+                                                    Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .referencias
                                                     .insert(lines[line_idx].address);
@@ -335,6 +343,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
+                                                lines[line_idx].armazena_em =
+                                                    Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .atribuicoes
                                                     .insert(lines[line_idx].address);
@@ -378,6 +388,8 @@ impl CodeGraph {
                             let achou = alocation_stack.iter_mut().rev().any(|item| {
                                 let endereco_relativo = endereco_real - item.nivel_memoria as i32;
                                 if endereco_relativo >= 0 {
+                                    lines[line_idx].armazena_em =
+                                        Some((item.addr, endereco_relativo as usize));
                                     item.variaveis[endereco_relativo as usize]
                                         .atribuicoes
                                         .insert(lines[line_idx].address);
@@ -407,6 +419,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
+                                                lines[line_idx].carrega_de =
+                                                    Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .usos
                                                     .insert(lines[line_idx].address);
@@ -437,23 +451,26 @@ impl CodeGraph {
                         Instruction::DMEM(n) => -n,
                         Instruction::RTPR(_, _n) => -2, // ignora o 'n' para só ser considerado na chamada
                         Instruction::CHPR(k) => {
-                            println!("Chamada a  funcao {}",k);
+                            println!("Chamada a  funcao {}", k);
                             //localiza a funcao
                             let func = self
                                 .funcoes
                                 .iter_mut()
                                 .find(|f| f.addr_inicio == k.unwrap())
                                 .unwrap();
-                            
+
                             // registra uso
                             func.usos.insert(lines[line_idx].address);
 
                             // registra acessos
-                            for acesso in func.atribuicao_memoria_externa.iter(){
+                            for acesso in func.atribuicao_memoria_externa.iter() {
                                 let endereco_real = memory as i32 + acesso;
                                 let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    let endereco_relativo =
+                                        endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
+                                        lines[line_idx].armazena_em =
+                                            Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .atribuicoes
                                             .insert(lines[line_idx].address);
@@ -467,11 +484,14 @@ impl CodeGraph {
                                     return;
                                 }
                             }
-                            for acesso in func.uso_memoria_externa.iter(){
+                            for acesso in func.uso_memoria_externa.iter() {
                                 let endereco_real = memory as i32 + acesso;
                                 let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    let endereco_relativo =
+                                        endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
+                                        lines[line_idx].carrega_de =
+                                            Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .usos
                                             .insert(lines[line_idx].address);
@@ -485,11 +505,14 @@ impl CodeGraph {
                                     return;
                                 }
                             }
-                            for acesso in func.referencias_memoria_externa.iter(){
+                            for acesso in func.referencias_memoria_externa.iter() {
                                 let endereco_real = memory as i32 + acesso;
                                 let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                    let endereco_relativo = endereco_real - item.nivel_memoria as i32;
+                                    let endereco_relativo =
+                                        endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
+                                        lines[line_idx].ref_de =
+                                            Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .referencias
                                             .insert(lines[line_idx].address);
@@ -668,19 +691,20 @@ impl CodeGraph {
     }
 
     // mapeia todas as informações de funções, exceto quando são chamadas
-    pub fn mapear_funcoes(&mut self){
+    pub fn mapear_funcoes(&mut self) {
         let mut memoria_consistente = true;
-        self.funcoes = self.instructions_unordered()
+        self.funcoes = self
+            .instructions_unordered()
             // localiza todos os nodes que são inicio de função
-            .filter_map(|line| match line.instruction{
-                Instruction::ENPR(_)=>Some(line.address),
-                _=>None
+            .filter_map(|line| match line.instruction {
+                Instruction::ENPR(_) => Some(line.address),
+                _ => None,
             })
             // para cada um deles, encontra:
             // - o endereço de retorno
             // - o numero de argumentos
             // - os acessos externos
-            .map(|addr_inicio|{
+            .map(|addr_inicio| {
                 let node_func = self.locate_address(addr_inicio).unwrap();
                 let mut atribuicao_memoria_externa: HashSet<i32> = HashSet::new();
                 let mut uso_memoria_externa: HashSet<i32> = HashSet::new();
@@ -690,48 +714,51 @@ impl CodeGraph {
 
                 let mut dfs = Dfs::new(&self.grafo, node_func);
                 while let Some(visited) = dfs.next(&self.grafo) {
-                    for line in self.grafo.node_weight(visited).unwrap(){
+                    for line in self.grafo.node_weight(visited).unwrap() {
                         match line.instruction {
-                            Instruction::ARMZ(nivel_lexico, nivel_memoria)=>{
-                                if nivel_lexico==1 && nivel_memoria<0{
-                                    if nivel_memoria>-3{
+                            Instruction::ARMZ(nivel_lexico, nivel_memoria) => {
+                                if nivel_lexico == 1 && nivel_memoria < 0 {
+                                    if nivel_memoria > -3 {
                                         memoria_consistente = false;
-                                    }
-                                    else{
-                                        atribuicao_memoria_externa.insert(nivel_memoria+2);
-                                    }
-                                }
-                            },
-                            Instruction::CRVL(nivel_lexico, nivel_memoria)=>{
-                                if nivel_lexico==1 && nivel_memoria<0{
-                                    if nivel_memoria>-3{
-                                        memoria_consistente = false;
-                                    }
-                                    else{
-                                        uso_memoria_externa.insert(nivel_memoria+2);
+                                    } else {
+                                        atribuicao_memoria_externa.insert(nivel_memoria + 2);
                                     }
                                 }
                             }
-                            Instruction::CREN(nivel_lexico, nivel_memoria)=>{
-                                if nivel_lexico==1 && nivel_memoria<0{
-                                    if nivel_memoria>-3{
+                            Instruction::CRVL(nivel_lexico, nivel_memoria) => {
+                                if nivel_lexico == 1 && nivel_memoria < 0 {
+                                    if nivel_memoria > -3 {
                                         memoria_consistente = false;
-                                    }
-                                    else{
-                                        referencias_memoria_externa.insert(nivel_memoria+2);
+                                    } else {
+                                        uso_memoria_externa.insert(nivel_memoria + 2);
                                     }
                                 }
                             }
-                            Instruction::RTPR(_, k)=>{
+                            Instruction::CREN(nivel_lexico, nivel_memoria) => {
+                                if nivel_lexico == 1 && nivel_memoria < 0 {
+                                    if nivel_memoria > -3 {
+                                        memoria_consistente = false;
+                                    } else {
+                                        referencias_memoria_externa.insert(nivel_memoria + 2);
+                                    }
+                                }
+                            }
+                            Instruction::RTPR(_, k) => {
                                 addr_retorno = line.address;
                                 args = k as usize;
                             }
-                            _=>()
+                            _ => (),
                         }
                     }
                 }
-                FuncMetadata{
-                    addr_inicio, addr_retorno, atribuicao_memoria_externa, uso_memoria_externa, referencias_memoria_externa, args, usos:HashSet::new()
+                FuncMetadata {
+                    addr_inicio,
+                    addr_retorno,
+                    atribuicao_memoria_externa,
+                    uso_memoria_externa,
+                    referencias_memoria_externa,
+                    args,
+                    usos: HashSet::new(),
                 }
             })
             .collect();
@@ -756,6 +783,13 @@ impl CodeGraph {
         self.grafo
             .node_weights_mut()
             .flat_map(|node_instructions| node_instructions.iter_mut())
+            .find(|f| f.address == addr)
+    }
+
+    pub fn instruction(&mut self, addr: usize) -> Option<&InstructionAndMetadata> {
+        self.grafo
+            .node_weights()
+            .flat_map(|node_instructions| node_instructions.iter())
             .find(|f| f.address == addr)
     }
 

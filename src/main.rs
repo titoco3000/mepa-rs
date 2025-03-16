@@ -11,11 +11,11 @@ const DEBUG: bool = true;
 
 fn main() {
     if DEBUG {
-        let output_path = PathBuf::from("output/simple.mepa");
-        compile(&PathBuf::from("samples/ipt/simple.ipt"), &output_path, true)
+        let output_path = PathBuf::from("output/test.mepa");
+        compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, true)
             .unwrap()
             .unwrap();
-        machine::interactive_execution(&output_path, vec![]);
+        // machine::interactive_execution(&output_path, vec![]);
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")

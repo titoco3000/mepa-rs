@@ -1,4 +1,4 @@
-use super::grafo::CodeGraph;
+use super::grafo::{CodeGraph, InstructionAndMetadata};
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
@@ -24,7 +24,7 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
     code.export_to_file(&PathBuf::from("output/debug/antes.dot"))
         .unwrap();
 
-    let functions = [fluxo, elimidar_codigo_morto];
+    let functions = [fluxo, elimidar_codigo_morto, propagar_constantes];
 
     loop {
         let mut mudou = false;
@@ -171,6 +171,89 @@ fn elimidar_codigo_morto(code: &mut CodeGraph) -> bool {
     }
     if mudou {
         code.mapear_memoria();
+    }
+    mudou
+}
+
+fn propagar_constantes(code: &mut CodeGraph) -> bool {
+    if !code.memoria_consistente {
+        return false;
+    }
+    let mut mudou = false;
+    // localiza todos CRCT
+    let declaracoes_de_constantes: Vec<InstructionAndMetadata> = code
+        .instructions_unordered()
+        .filter_map(|line| {
+            if matches!(line.instruction, Instruction::CRCT(_)) {
+                Some(line.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
+    // para cada um, localiza todos os usos
+    for declaracao in declaracoes_de_constantes {
+        // Para o ARMZ que usa esse valor (que será ou um ou zero)
+        let aloc_addresses: Vec<(usize, usize)> = declaracao.allocation.unwrap().variaveis[0]
+            .usos
+            .iter()
+            .filter_map(|uso| {
+                let line = code.instruction(*uso).unwrap();
+                if matches!(line.instruction, Instruction::ARMZ(_, _)) {
+                    line.armazena_em
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        //para cada alocacao-destino
+        for aloc_addr in &aloc_addresses {
+            // cada CRVL que usa essa instrucao
+
+            let carregamentos: Vec<usize> = code
+                .instruction(aloc_addr.0)
+                .unwrap()
+                .allocation
+                .as_ref()
+                .unwrap()
+                .variaveis[aloc_addr.1]
+                .usos
+                .clone()
+                .iter()
+                .filter_map(|addr| {
+                    let line = code.instruction(*addr).unwrap();
+                    if matches!(line.instruction, Instruction::CRVL(_, _)) {
+                        Some(line.address.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            // remove usos da lista, ja que vao ser removidos
+            if let Some(aloc) = &mut code
+                .instruction_mut(aloc_addr.0)
+                .unwrap()
+                .allocation
+                .as_mut()
+            {
+                for c in &carregamentos {
+                    aloc.variaveis[aloc_addr.1].usos.remove(&c);
+                }
+            }
+            for c in carregamentos {
+                if let Instruction::CRCT(n) = declaracao.instruction{
+                    if let Some(line) = code.instruction_mut(c){
+                        println!("Substituindo {} da linha {} por CRCT({})",line.instruction, c,n);
+                        line.instruction = Instruction::CRCT(n);
+                        line.carrega_de = None;
+                        mudou = true;
+                    }
+                }
+            }
+
+        }
     }
     mudou
 }

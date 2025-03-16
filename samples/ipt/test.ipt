@@ -1,0 +1,7 @@
+fn main(){
+    int a,b,c;
+    a = 12;
+    b = a;
+    c = b;
+    print(c);
+}
