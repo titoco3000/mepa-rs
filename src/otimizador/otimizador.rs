@@ -1,4 +1,4 @@
-use super::grafo::{self, CodeGraph, InstructionAndMetadata};
+use super::grafo::{CodeGraph, InstructionAndMetadata};
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
@@ -51,6 +51,7 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
 
     code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
         .unwrap();
+    code.open_browser_visualization().expect("Falha ao abrir visualizacao");
 
     code.to_mepa_code()
 }

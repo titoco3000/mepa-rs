@@ -11,6 +11,7 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::usize;
+use urlencoding::encode;
 
 #[derive(Debug, Clone)]
 pub struct Variavel {
@@ -1126,14 +1127,7 @@ impl CodeGraph {
         }
     }
 
-    pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
-        if let Some(parent) = filename.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Create or open the file
-        let file = File::create(filename)?;
-
+    pub fn get_dot(&self)->String{
         let mut graph_with_code: Graph<String, ()> = Graph::new();
         for instructions in self.grafo.node_weights() {
             let linhas_de_mepa: Vec<String> = instructions
@@ -1203,10 +1197,34 @@ impl CodeGraph {
                 if self.memoria_consistente{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA\\naddr: instrução (atribuições | usos | referências | addr de dealoc)\"]\n"}
                 else{"\tgraph [labelloc=\"b\", label=\"REFERÊNCIA (caso: memória inconsistente)\\naddr: instrução\"]\n"});
         }
+        processed_dot
+    }
+
+    pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
+        if let Some(parent) = filename.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        // Create or open the file
+        let file = File::create(filename)?;
 
         // Write the processed string to the file
-        write!(&file, "{}", processed_dot)
+        write!(&file, "{}", self.get_dot())
     }
+
+    pub fn open_browser_visualization(&self)->Result<(), std::io::Error>{
+        let url ="https://dreampuf.github.io/GraphvizOnline/?engine=dot#".to_owned()+ &encode(&self.get_dot());
+        open::that(url)
+    }
+
+    // pub fn remove_instruction(&mut self, addr:usize)->Result<(), ()>{
+    //     if let Some(line) = self.instruction(addr).cloned(){
+    //         match line.instruction {
+    //             Instruction::                
+    //         }
+    //     }
+    //     Err(())
+    // }
 
     fn debug_print(&self){
         println!("-------CODE-----------------");
