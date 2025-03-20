@@ -65,6 +65,15 @@ pub struct InstructionAndMetadata {
     pub carrega_de: Option<(usize, usize)>,
     pub ref_de: Option<(usize, usize)>,
 }
+impl InstructionAndMetadata {
+    pub fn strip_metadata(&mut self){
+        self.initial_memory_usage = None;
+        self.allocation = None;
+        self.armazena_em = None;
+        self.carrega_de = None;
+        self.ref_de = None;
+    }
+}
 #[derive(Debug, Clone)]
 pub struct FuncMetadata {
     pub addr_inicio: usize,
@@ -199,6 +208,13 @@ impl CodeGraph {
         if !self.memoria_consistente {
             return;
         }
+        // limpa a memoria de todos as linhas
+
+        for line in self.instructions_mut(){
+            line.strip_metadata();
+        }
+
+
         let mut bases_mapeamento: Vec<(usize, usize)> = self
             .funcoes
             .iter()
@@ -241,18 +257,13 @@ impl CodeGraph {
                 } else {
                     self.grafo.node_weight_mut(visited).unwrap()
                 };
+
+                println!("lines: ");
+                for l in lines.iter(){
+                    println!("{}: {:?}",l.address, l.instruction);
+                }
                 let mut memory: usize = lines.first().unwrap().initial_memory_usage.unwrap();
                 for line_idx in 0..lines.len() {
-                    println!(
-                        "\n{}: {}",
-                        lines[line_idx].address, lines[line_idx].instruction
-                    );
-                    println!("alocation_stack:");
-                    for a in &alocation_stack {
-                        println!("{}: {}", a.addr, a.nivel_memoria + a.variaveis.len());
-                    }
-                    println!("");
-
                     let memory_delta = match &lines[line_idx].instruction {
                         Instruction::CRCT(_) | Instruction::LEIT | Instruction::ENPR(_) => 1,
                         Instruction::CRVL(nivel_lexico, nivel_memoria)
@@ -262,12 +273,7 @@ impl CodeGraph {
                                 if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
                                     if endereco_real >= 0 {
-                                        println!(
-                                            "Procurando qnd o nivel chega de novo a {}",
-                                            endereco_real
-                                        );
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                            println!("item: {}", item.nivel_memoria);
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
@@ -345,6 +351,7 @@ impl CodeGraph {
                                             if endereco_relativo >= 0 {
                                                 lines[line_idx].armazena_em =
                                                     Some((item.addr, endereco_relativo as usize));
+                                                println!("{:?}",lines[line_idx]);
                                                 item.variaveis[endereco_relativo as usize]
                                                     .atribuicoes
                                                     .insert(lines[line_idx].address);
@@ -410,12 +417,7 @@ impl CodeGraph {
                                 if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
                                     if endereco_real >= 0 {
-                                        println!(
-                                            "Procurando qnd o nivel chega de novo a {}",
-                                            endereco_real
-                                        );
                                         let achou = alocation_stack.iter_mut().rev().any(|item| {
-                                            println!("item: {}", item.nivel_memoria);
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
@@ -632,6 +634,7 @@ impl CodeGraph {
                 }
                 let neighbors: Vec<NodeIndex> =
                     self.grafo.neighbors(visited).map(|n| n.clone()).collect();
+                println!("neghbor count: {}",neighbors.len());
                 // Propaga para os vizinhos
                 for neighbor_index in neighbors.iter() {
                     let neighbor = self
@@ -688,6 +691,7 @@ impl CodeGraph {
                 self.instruction_mut(addr).unwrap().allocation = Some(aloc);
             }
         }
+        self.debug_print();
     }
 
     // mapeia todas as informações de funções, exceto quando são chamadas
@@ -814,6 +818,53 @@ impl CodeGraph {
             .flat_map(|node_instructions| node_instructions.iter())
     }
 
+    pub fn instructions_between(
+        &self,
+        addr_inicio: usize,
+        addr_fim: usize,
+    ) -> impl Iterator<Item = &InstructionAndMetadata> {
+        let mut visited = HashSet::new();
+        let mut stack = Vec::new();
+
+        let start_node = self.locate_address(addr_inicio).unwrap();
+        let mut end_node = start_node;
+        stack.push(start_node.clone());
+
+        while let Some(node) = stack.pop() {
+            if self
+                .grafo
+                .node_weight(node)
+                .unwrap()
+                .iter()
+                .all(|line| line.address != addr_fim)
+            {
+                for vizinho in self.grafo.neighbors(node) {
+                    if !visited.contains(&vizinho) && stack.contains(&vizinho) {
+                        stack.push(vizinho);
+                    }
+                }
+            } else {
+                end_node = node.clone();
+            }
+            visited.insert(node);
+        }
+        visited
+            .into_iter()
+            .map(move |node| {
+                self.grafo
+                    .node_weight(node)
+                    .unwrap()
+                    .iter()
+                    .skip_while(move |inst| node == start_node && inst.address < addr_inicio)
+                    .take_while(move |inst| node != end_node || inst.address <= addr_fim)
+            })
+            .flatten()
+    }
+
+    pub fn insert_instruction(&mut self, addr:usize, intruction:Instruction){
+
+    }
+
     pub fn get_fn_index(&self, addr: usize) -> Option<usize> {
         self.funcoes.iter().enumerate().find_map(|(i, f)| {
             if addr >= f.addr_inicio && addr <= f.addr_retorno {
@@ -824,9 +875,12 @@ impl CodeGraph {
         })
     }
 
-    //falta incluir mudança de contagem de chamadas de funcao
-    // pub fn remove_instruction(&mut self, addr: usize) {
-    //     self.remove_instruction_controlled(addr, true);
+    // pub fn replace_instruction(&mut self, addr: usize, nova:Instruction) {
+    //     if let Some(line) = self.instruction(addr).cloned(){
+    //         match line.instruction {
+                
+    //         }
+    //     }
     // }
 
     pub fn remove_instruction_controlled(&mut self, addr: usize, remap: bool) {
@@ -1153,6 +1207,27 @@ impl CodeGraph {
         // Write the processed string to the file
         write!(&file, "{}", processed_dot)
     }
+
+    fn debug_print(&self){
+        println!("-------CODE-----------------");
+        for node in self.grafo.node_indices(){
+            println!("Node {}",node.index());
+            for line in self.grafo.node_weight(node).unwrap(){
+                println!("    {}: {:?}",line.address, line.instruction);
+            }
+        }
+        println!("edges:");
+        for edge in self.grafo.edge_indices(){
+            let edge = self.grafo.edge_endpoints(edge).unwrap();
+            println!("    {} -> {}",edge.0.index(), edge.1.index());
+        }
+        println!("fn:");
+        for f in &self.funcoes{
+            println!("    {}: usos: {:?}",f.addr_inicio, f.usos);
+        }
+        println!("----------------------------");
+    }
+
 }
 
 pub fn remover_rotulos_simbolicos(mc: MepaCode) -> MepaCode {
