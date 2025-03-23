@@ -62,17 +62,17 @@ pub struct InstructionAndMetadata {
     pub instruction: Instruction,
     pub initial_memory_usage: Option<usize>,
     pub allocation: Option<Allocation>,
-    pub armazena_em: Option<(usize, usize)>, //addr de alocacao, addr da variavel
-    pub carrega_de: Option<(usize, usize)>,
-    pub ref_de: Option<(usize, usize)>,
+    // pub armazena_em: Option<(usize, usize)>, //addr de alocacao, addr da variavel
+    // pub carrega_de: Option<(usize, usize)>,
+    // pub ref_de: Option<(usize, usize)>,
 }
 impl InstructionAndMetadata {
-    pub fn strip_metadata(&mut self){
+    pub fn strip_metadata(&mut self) {
         self.initial_memory_usage = None;
         self.allocation = None;
-        self.armazena_em = None;
-        self.carrega_de = None;
-        self.ref_de = None;
+        // self.armazena_em = None;
+        // self.carrega_de = None;
+        // self.ref_de = None;
     }
 }
 #[derive(Debug, Clone)]
@@ -142,9 +142,9 @@ impl CodeGraph {
                         instruction: code[addr].1.clone(),
                         initial_memory_usage: None,
                         allocation: None,
-                        carrega_de: None,
-                        armazena_em: None,
-                        ref_de: None,
+                        // carrega_de: None,
+                        // armazena_em: None,
+                        // ref_de: None,
                     })
                     .collect();
                 grafo.grafo.add_node(instructions)
@@ -211,10 +211,9 @@ impl CodeGraph {
         }
         // limpa a memoria de todos as linhas
 
-        for line in self.instructions_mut(){
+        for line in self.instructions_mut() {
             line.strip_metadata();
         }
-
 
         let mut bases_mapeamento: Vec<(usize, usize)> = self
             .funcoes
@@ -259,17 +258,12 @@ impl CodeGraph {
                     self.grafo.node_weight_mut(visited).unwrap()
                 };
 
-                println!("lines: ");
-                for l in lines.iter(){
-                    println!("{}: {:?}",l.address, l.instruction);
-                }
                 let mut memory: usize = lines.first().unwrap().initial_memory_usage.unwrap();
                 for line_idx in 0..lines.len() {
                     let memory_delta = match &lines[line_idx].instruction {
                         Instruction::CRCT(_) | Instruction::LEIT | Instruction::ENPR(_) => 1,
                         Instruction::CRVL(nivel_lexico, nivel_memoria)
                         | Instruction::CRVI(nivel_lexico, nivel_memoria) => {
-                            println!("{:?}", lines[line_idx]);
                             if *nivel_lexico == 1 {
                                 if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
@@ -278,8 +272,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                lines[line_idx].carrega_de =
-                                                    Some((item.addr, endereco_relativo as usize));
+                                                // lines[line_idx].carrega_de =
+                                                //     Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .usos
                                                     .insert(lines[line_idx].address);
@@ -314,8 +308,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                lines[line_idx].ref_de =
-                                                    Some((item.addr, endereco_relativo as usize));
+                                                // lines[line_idx].ref_de =
+                                                //     Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .referencias
                                                     .insert(lines[line_idx].address);
@@ -350,9 +344,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                lines[line_idx].armazena_em =
-                                                    Some((item.addr, endereco_relativo as usize));
-                                                println!("{:?}",lines[line_idx]);
+                                                // lines[line_idx].armazena_em =
+                                                //     Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .atribuicoes
                                                     .insert(lines[line_idx].address);
@@ -396,8 +389,8 @@ impl CodeGraph {
                             let achou = alocation_stack.iter_mut().rev().any(|item| {
                                 let endereco_relativo = endereco_real - item.nivel_memoria as i32;
                                 if endereco_relativo >= 0 {
-                                    lines[line_idx].armazena_em =
-                                        Some((item.addr, endereco_relativo as usize));
+                                    // lines[line_idx].armazena_em =
+                                    //     Some((item.addr, endereco_relativo as usize));
                                     item.variaveis[endereco_relativo as usize]
                                         .atribuicoes
                                         .insert(lines[line_idx].address);
@@ -413,7 +406,6 @@ impl CodeGraph {
                             -1
                         }
                         Instruction::ARMI(nivel_lexico, nivel_memoria) => {
-                            println!("{:?}", lines[line_idx]);
                             if *nivel_lexico == 1 {
                                 if let Some(_) = current_func {
                                     let endereco_real = nivel_memoria + 2;
@@ -422,8 +414,8 @@ impl CodeGraph {
                                             let endereco_relativo =
                                                 endereco_real - item.nivel_memoria as i32;
                                             if endereco_relativo >= 0 {
-                                                lines[line_idx].carrega_de =
-                                                    Some((item.addr, endereco_relativo as usize));
+                                                // lines[line_idx].carrega_de =
+                                                //     Some((item.addr, endereco_relativo as usize));
                                                 item.variaveis[endereco_relativo as usize]
                                                     .usos
                                                     .insert(lines[line_idx].address);
@@ -472,8 +464,8 @@ impl CodeGraph {
                                     let endereco_relativo =
                                         endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
-                                        lines[line_idx].armazena_em =
-                                            Some((item.addr, endereco_relativo as usize));
+                                        // lines[line_idx].armazena_em =
+                                        //     Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .atribuicoes
                                             .insert(lines[line_idx].address);
@@ -493,8 +485,8 @@ impl CodeGraph {
                                     let endereco_relativo =
                                         endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
-                                        lines[line_idx].carrega_de =
-                                            Some((item.addr, endereco_relativo as usize));
+                                        // lines[line_idx].carrega_de =
+                                        //     Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .usos
                                             .insert(lines[line_idx].address);
@@ -514,8 +506,8 @@ impl CodeGraph {
                                     let endereco_relativo =
                                         endereco_real - item.nivel_memoria as i32;
                                     if endereco_relativo >= 0 {
-                                        lines[line_idx].ref_de =
-                                            Some((item.addr, endereco_relativo as usize));
+                                        // lines[line_idx].ref_de =
+                                        //     Some((item.addr, endereco_relativo as usize));
                                         item.variaveis[endereco_relativo as usize]
                                             .referencias
                                             .insert(lines[line_idx].address);
@@ -554,6 +546,7 @@ impl CodeGraph {
                             _ => {
                                 if let Some(item) = alocation_stack.iter_mut().last() {
                                     item.variaveis[0].usos.insert(lines[line_idx].address);
+                                    // lines[line_idx].carrega_de = Some((item.addr, 0));
                                 } else {
                                     self.memoria_consistente = false;
                                     return;
@@ -635,7 +628,6 @@ impl CodeGraph {
                 }
                 let neighbors: Vec<NodeIndex> =
                     self.grafo.neighbors(visited).map(|n| n.clone()).collect();
-                println!("neghbor count: {}",neighbors.len());
                 // Propaga para os vizinhos
                 for neighbor_index in neighbors.iter() {
                     let neighbor = self
@@ -840,7 +832,7 @@ impl CodeGraph {
                 .all(|line| line.address != addr_fim)
             {
                 for vizinho in self.grafo.neighbors(node) {
-                    if !visited.contains(&vizinho) && stack.contains(&vizinho) {
+                    if !visited.contains(&vizinho) && !stack.contains(&vizinho) {
                         stack.push(vizinho);
                     }
                 }
@@ -862,9 +854,30 @@ impl CodeGraph {
             .flatten()
     }
 
-    pub fn insert_instruction(&mut self, addr:usize, intruction:Instruction){
+    pub fn apply_on_instructions_between(
+        &mut self,
+        addr_inicio: usize,
+        addr_fim: usize,
+        mut f: impl FnMut(&mut InstructionAndMetadata),
+    ) {
+        let addrs: Vec<usize> = self
+            .instructions_between(addr_inicio, addr_fim)
+            .map(|line| line.address)
+            .collect();
 
+        println!(
+            "instructions_between {} and {}: {:?}",
+            addr_inicio, addr_fim, addrs
+        );
+
+        for addr in addrs {
+            if let Some(instr) = self.instruction_mut(addr) {
+                f(instr);
+            }
+        }
     }
+
+    //pub fn insert_instruction(&mut self, addr: usize, intruction: Instruction) {}
 
     pub fn get_fn_index(&self, addr: usize) -> Option<usize> {
         self.funcoes.iter().enumerate().find_map(|(i, f)| {
@@ -879,7 +892,7 @@ impl CodeGraph {
     // pub fn replace_instruction(&mut self, addr: usize, nova:Instruction) {
     //     if let Some(line) = self.instruction(addr).cloned(){
     //         match line.instruction {
-                
+
     //         }
     //     }
     // }
@@ -1127,7 +1140,7 @@ impl CodeGraph {
         }
     }
 
-    pub fn get_dot(&self)->String{
+    pub fn get_dot(&self) -> String {
         let mut graph_with_code: Graph<String, ()> = Graph::new();
         for instructions in self.grafo.node_weights() {
             let linhas_de_mepa: Vec<String> = instructions
@@ -1212,40 +1225,247 @@ impl CodeGraph {
         write!(&file, "{}", self.get_dot())
     }
 
-    pub fn open_browser_visualization(&self)->Result<(), std::io::Error>{
-        let url ="https://dreampuf.github.io/GraphvizOnline/?engine=dot#".to_owned()+ &encode(&self.get_dot());
+    pub fn open_browser_visualization(&self) -> Result<(), std::io::Error> {
+        let url = "https://dreampuf.github.io/GraphvizOnline/?engine=dot#".to_owned()
+            + &encode(&self.get_dot());
         open::that(url)
     }
 
-    // pub fn remove_instruction(&mut self, addr:usize)->Result<(), ()>{
-    //     if let Some(line) = self.instruction(addr).cloned(){
-    //         match line.instruction {
-    //             Instruction::                
-    //         }
-    //     }
-    //     Err(())
-    // }
+    pub fn decrease_memory_alocation(&mut self, addr: usize) {
+        if let Some(line) = self.instruction(addr).cloned() {
+            // reduz em 1 o uso de memoria subsequente
+            match line.instruction {
+                Instruction::AMEM(_)
+                | Instruction::CRCT(_)
+                | Instruction::CRVL(_, _)
+                | Instruction::CRVI(_, _)
+                | Instruction::CREN(_, _) => {
+                    self.apply_on_instructions_between(
+                        addr + 1,
+                        line.allocation
+                            .as_ref()
+                            .unwrap()
+                            .liberation_address
+                            .unwrap(),
+                        |line| {
+                            *line.initial_memory_usage.as_mut().unwrap() -= 1;
+                        },
+                    );
+                    // verifica liberação
+                    let to_remove = if let Some(dealoc) = self.instruction_mut(
+                        line.allocation
+                            .as_ref()
+                            .unwrap()
+                            .liberation_address
+                            .unwrap(),
+                    ) {
+                        match dealoc.instruction {
+                            Instruction::DMEM(n) => {
+                                if n == 1 {
+                                    Some(dealoc.address)
+                                } else {
+                                    dealoc.instruction = Instruction::DMEM(n - 1);
+                                    None
+                                }
+                            }
+                            _ => Some(dealoc.address),
+                        }
+                    } else {
+                        None
+                    };
+                    if let Some(to_remove) = to_remove {
+                        self.remove_instruction_controlled(to_remove, false);
+                    }
+                }
+                _ => panic!("Tentou diminuir alocação que não existe"),
+            }
+            match line.instruction {
+                Instruction::AMEM(n) => {
+                    let mut updates: Vec<usize> = Vec::new();
+                    // let mut updates_em_referencias: Vec<usize> = Vec::new();
+                    if let Some(line) = self.instruction_mut(line.address) {
+                        line.instruction = Instruction::AMEM(n - 1);
+                        if let Some(aloc) = &mut line.allocation {
+                            // para cada variavel
+                            for i in 0..aloc.variaveis.len() {
+                                if aloc.variaveis[i].usos.is_empty()
+                                    && aloc.variaveis[i].referencias.is_empty()
+                                {
+                                    println!("Vou remover var {}/{}", i, aloc.variaveis.len());
+                                    // Se for uma sem uso ou ref
+                                    // (supoe que atribuições ja foram removidas)
+                                    // remove ela e para o loop
+                                    aloc.variaveis.remove(i);
+                                    for j in i..aloc.variaveis.len() {
+                                        for v in aloc.variaveis[j].usos.iter() {
+                                            updates.push(*v);
+                                        }
+                                        for v in aloc.variaveis[j].atribuicoes.iter() {
+                                            updates.push(*v);
+                                        }
+                                        for v in aloc.variaveis[j].referencias.iter() {
+                                            updates.push(*v);
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
 
-    fn debug_print(&self){
+                    for addr_update in updates {
+                        if let Some(line_to_be_updated) = self.instruction_mut(addr_update) {
+                            match line_to_be_updated.instruction.clone() {
+                                Instruction::CRVL(m, n) => {
+                                    line_to_be_updated.instruction = Instruction::CRVL(m, n - 1)
+                                }
+                                Instruction::CRVI(m, n) => {
+                                    line_to_be_updated.instruction = Instruction::CRVI(m, n - 1)
+                                }
+                                Instruction::ARMI(m, n) => {
+                                    line_to_be_updated.instruction = Instruction::ARMI(m, n - 1)
+                                }
+                                Instruction::ARMZ(m, n) => {
+                                    line_to_be_updated.instruction = Instruction::ARMZ(m, n - 1)
+                                }
+                                Instruction::CREN(m, n) => {
+                                    line_to_be_updated.instruction = Instruction::CREN(m, n - 1)
+                                }
+                                _ => (),
+                            }
+                        }
+                    }
+
+                    if n == 1 {
+                        self.remove_instruction_controlled(line.address, false);
+                    } else {
+                        //diminui n
+                        self.instruction_mut(line.address)
+                            .as_mut()
+                            .unwrap()
+                            .instruction = Instruction::AMEM(n - 1);
+                    }
+                }
+                Instruction::CRCT(_) => {
+                    self.remove_instruction_controlled(line.address, false);
+                }
+                Instruction::CRVL(_, _) | Instruction::CRVI(_, _) => {
+                    let (carrega_de, idx) = self.linhas_usadas_por(line.address).next().unwrap();
+                    //self.instruction(line.address).unwrap().carrega_de.unwrap();
+                    self.instruction_mut(carrega_de)
+                        .as_mut()
+                        .unwrap()
+                        .allocation
+                        .as_mut()
+                        .unwrap()
+                        .variaveis[idx]
+                        .usos
+                        .remove(&line.address);
+                    self.remove_instruction_controlled(line.address, false);
+                }
+                Instruction::CREN(_, _) => {
+                    let (ref_de, idx) = self.linhas_referenciadas_por(line.address).next().unwrap();
+                    //let (ref_de, idx) = self.instruction(line.address).unwrap().ref_de.unwrap();
+                    self.instruction_mut(ref_de)
+                        .as_mut()
+                        .unwrap()
+                        .allocation
+                        .as_mut()
+                        .unwrap()
+                        .variaveis[idx]
+                        .referencias
+                        .remove(&line.address);
+                    self.remove_instruction_controlled(line.address, false);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    pub fn linhas_usadas_por(&self, addr: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.instructions_unordered()
+            .filter_map(move |line| {
+                line.allocation.as_ref().map(|aloc| {
+                    aloc.variaveis
+                        .iter()
+                        .enumerate()
+                        .filter_map(move |(idx, var)| {
+                            if var.usos.contains(&addr) {
+                                Some((line.address, idx))
+                            } else {
+                                None
+                            }
+                        })
+                })
+            })
+            .flatten()
+    }
+
+    pub fn linhas_atribuidas_por(&self, addr: usize) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.instructions_unordered()
+            .filter_map(move |line| {
+                line.allocation.as_ref().map(|aloc| {
+                    aloc.variaveis
+                        .iter()
+                        .enumerate()
+                        .filter_map(move |(idx, var)| {
+                            if var.atribuicoes.contains(&addr) {
+                                Some((line.address, idx))
+                            } else {
+                                None
+                            }
+                        })
+                })
+            })
+            .flatten()
+    }
+
+    pub fn linhas_referenciadas_por(
+        &self,
+        addr: usize,
+    ) -> impl Iterator<Item = (usize, usize)> + '_ {
+        self.instructions_unordered()
+            .filter_map(move |line| {
+                line.allocation.as_ref().map(|aloc| {
+                    aloc.variaveis
+                        .iter()
+                        .enumerate()
+                        .filter_map(move |(idx, var)| {
+                            if var.referencias.contains(&addr) {
+                                Some((line.address, idx))
+                            } else {
+                                None
+                            }
+                        })
+                })
+            })
+            .flatten()
+    }
+
+    fn debug_print(&self) {
         println!("-------CODE-----------------");
-        for node in self.grafo.node_indices(){
-            println!("Node {}",node.index());
-            for line in self.grafo.node_weight(node).unwrap(){
-                println!("    {}: {:?}",line.address, line.instruction);
+        for node in self.grafo.node_indices() {
+            println!("Node {}", node.index());
+            for line in self.grafo.node_weight(node).unwrap() {
+                if let Some(aloc) = &line.allocation {
+                    if let Some(var) = aloc.variaveis.get(0) {
+                        print!("{:?}", var.usos);
+                    }
+                }
+                println!("    {}: {:?}", line.address, line.instruction);
             }
         }
         println!("edges:");
-        for edge in self.grafo.edge_indices(){
+        for edge in self.grafo.edge_indices() {
             let edge = self.grafo.edge_endpoints(edge).unwrap();
-            println!("    {} -> {}",edge.0.index(), edge.1.index());
+            println!("    {} -> {}", edge.0.index(), edge.1.index());
         }
         println!("fn:");
-        for f in &self.funcoes{
-            println!("    {}: usos: {:?}",f.addr_inicio, f.usos);
+        for f in &self.funcoes {
+            println!("    {}: usos: {:?}", f.addr_inicio, f.usos);
         }
         println!("----------------------------");
     }
-
 }
 
 pub fn remover_rotulos_simbolicos(mc: MepaCode) -> MepaCode {
