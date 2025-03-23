@@ -2,7 +2,6 @@ use super::grafo::{CodeGraph, InstructionAndMetadata};
 use crate::mepa::code::MepaCode;
 use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
-use core::panic;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use std::io;
@@ -25,12 +24,16 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
     code.export_to_file(&PathBuf::from("output/debug/antes.dot"))
         .unwrap();
 
+    code.open_browser_visualization()
+        .expect("Falha ao abrir visualizacao");
+
+    code.print_vars();
+
     let functions = [
         fluxo,
         elimidar_codigo_morto,
         propagar_constantes,
         eliminar_variaveis_mortas,
-        // eliminar_inconsequentes
     ];
 
     loop {
@@ -47,11 +50,10 @@ pub fn otimizar(code: MepaCode) -> MepaCode {
         }
     }
 
-    // code.print_vars();
-
     code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
         .unwrap();
-    code.open_browser_visualization().expect("Falha ao abrir visualizacao");
+    code.open_browser_visualization()
+        .expect("Falha ao abrir visualizacao");
 
     code.to_mepa_code()
 }
@@ -138,13 +140,15 @@ fn fluxo(code: &mut CodeGraph) -> bool {
 fn elimidar_codigo_morto(code: &mut CodeGraph) -> bool {
     println!("Eliminando codigo morto");
     let mut mudou = false;
-    for node in code
-    .grafo
-    .node_indices(){
-        println!("Verificando o node {}:", node.index());
-        println!("    incoming: {}:", code.grafo.edges_directed(node, petgraph::Direction::Incoming)
-        .count());
-    }
+    // for node in code.grafo.node_indices() {
+    //     println!("Verificando o node {}:", node.index());
+    //     println!(
+    //         "    incoming: {}:",
+    //         code.grafo
+    //             .edges_directed(node, petgraph::Direction::Incoming)
+    //             .count()
+    //     );
+    // }
 
     // acha nodes inacessiveis
     let inacessiveis: Vec<NodeIndex> = code
@@ -214,9 +218,13 @@ fn propagar_constantes(code: &mut CodeGraph) -> bool {
             .usos
             .iter()
             .filter_map(|uso| {
-                let line = code.instruction(*uso).unwrap();
-                if matches!(line.instruction, Instruction::ARMZ(_, _)) {
-                    line.armazena_em
+                let (inst, addr) = if let Some(line) = code.instruction(*uso) {
+                    (line.instruction.clone(), line.address)
+                } else {
+                    panic!()
+                };
+                if matches!(inst, Instruction::ARMZ(_, _)) {
+                    code.linhas_atribuidas_por(addr).next()
                 } else {
                     None
                 }
@@ -266,7 +274,6 @@ fn propagar_constantes(code: &mut CodeGraph) -> bool {
                             line.instruction, c, n
                         );
                         line.instruction = Instruction::CRCT(n);
-                        line.carrega_de = None;
                         mudou = true;
                     }
                 }
@@ -307,133 +314,198 @@ fn eliminar_variaveis_mortas(code: &mut CodeGraph) -> bool {
             ) {
                 let vars = aloc.variaveis;
                 // para cada variavel de cada alocação
-                for (var_idx, var) in vars.iter().enumerate() {
+                for (_var_idx, var) in vars.iter().enumerate() {
                     if var.referencias.len() > 0 {
                         // se possui referencias, os items subsequentes podem ser atingidos e não podem ser modificados
                         break;
                     }
                     // se não tem nenhum uso ou referencia, é variavel morta. Mas podemos eliminar?
                     if var.usos.len() == 0 {
-                        let mut atribuido_por_procedimento = false;
+                        let mut algum_atribuido_por_procedimento = false;
+                        let mut usos = Vec::new();
                         // substitui todas as atribuições que não forem CHPR por DMEM(1)
                         for atribuicao in &var.atribuicoes {
+                            // carrega line mut
                             if let Some(attr_line) = code.instruction_mut(*atribuicao) {
-                                if !matches!(attr_line.instruction, Instruction::CHPR(_)){
+                                // se for CHPR, atualiza flag
+                                if matches!(attr_line.instruction, Instruction::CHPR(_)) {
+                                    algum_atribuido_por_procedimento = true;
+                                }
+                                // se não:
+                                else {
+                                    // substitui por DMEM(1)
                                     attr_line.instruction = Instruction::DMEM(1);
-                                    attr_line.armazena_em = None;
+                                    // encontra todos os lugares de onde carregava
+                                    usos = code.linhas_usadas_por(*atribuicao).collect();
+
                                     mudou = true;
                                 }
-                                else{
-                                    atribuido_por_procedimento = true;
-                                }
                             }
+                            // remove os usos
+                            for (aloc_addr, var) in &usos {
+                                code.instruction_mut(*aloc_addr)
+                                    .as_mut()
+                                    .unwrap()
+                                    .allocation
+                                    .as_mut()
+                                    .unwrap()
+                                    .variaveis[*var]
+                                    .usos
+                                    .remove(atribuicao);
+                            }
+
+                            // let mut carregava_de = None;
+                            // if let Some(attr_line) = code.instruction_mut(*atribuicao) {
+                            //     if !matches!(attr_line.instruction, Instruction::CHPR(_)) {
+                            //         println!(
+                            //             "Substituindo {}: {} por DMEM(1). Ele Carregava de {:?}",
+                            //             attr_line.address,
+                            //             attr_line.instruction,
+                            //             attr_line.carrega_de
+                            //         );
+                            //         attr_line.instruction = Instruction::DMEM(1);
+                            //         attr_line.armazena_em = None;
+                            //         carregava_de = attr_line.carrega_de;
+                            //         attr_line.carrega_de = None;
+                            //         mudou = true;
+                            //     } else {
+                            //         atribuido_por_procedimento = true;
+                            //     }
+                            // }
+                            // if let Some((addr, idx)) = carregava_de {
+                            //     if let Some(line) = code.instruction_mut(addr) {
+                            //         line.allocation.as_mut().unwrap().variaveis[idx]
+                            //             .usos
+                            //             .remove(atribuicao);
+                            //     }
+                            // }
                         }
                         // se não foi atribuido por procedimento, pode remover a sua alocação
-                        if !atribuido_por_procedimento{
+                        if !algum_atribuido_por_procedimento {
                             mudou = true;
-                            match line.instruction {
-                                //se alocação for CRCT, CRVL, CREN ou CRVI, remove a instrução
-                                Instruction::CRCT(_)
-                                | Instruction::CRVL(_, _)
-                                | Instruction::CREN(_, _)
-                                | Instruction::CRVI(_, _) => {
-                                    code.remove_instruction_controlled(line.address, false);
-                                }
-                                //se alocação for AMEM:
-                                _ => {
-                                    let tamanho = if let Instruction::AMEM(n) = line.instruction {
-                                        n
-                                    } else {
-                                        panic!()
-                                    };
-                                    //diminui a alocação em uma unidade
-                                    if let Some(line) = code.instruction_mut(line.address) {
-                                        line.instruction = Instruction::AMEM(tamanho - 1);
-                                        line.allocation.as_mut().unwrap().variaveis.remove(var_idx);
-                                    }
-    
-                                    //localiza escopo
-                                    let escopo = if code.get_fn_index(line.address).is_some() {
-                                        1
-                                    } else {
-                                        0
-                                    };
-                                    // localiza endereço usado para acessar essa variavel
-                                    let var_n = (aloc.nivel_memoria + var_idx) as i32;
-    
-                                    //localiza todos os usos, referencias e atribuicoes com numeros acima do removido, até a liberação
-                                    let usos_subsequentes: Vec<usize> = code
-                                        .instructions_between(
-                                            line.address,
-                                            aloc.liberation_address.unwrap(),
-                                        )
-                                        .filter_map(|line_between| match line_between.instruction {
-                                            Instruction::CRVL(m, n)
-                                            | Instruction::CREN(m, n)
-                                            | Instruction::ARMZ(m, n)
-                                            | Instruction::CRVI(m, n)
-                                            | Instruction::ARMI(m, n) => {
-                                                if m == escopo && n > var_n {
-                                                    Some(line_between.address)
-                                                } else {
-                                                    None
-                                                }
-                                            }
-                                            _ => None,
-                                        })
-                                        .collect();
-                                    for uso in usos_subsequentes {
-                                        //para cada um, diminui 1
-                                        if let Some(uso) = code.instruction_mut(uso) {
-                                            uso.instruction = match uso.instruction {
-                                                Instruction::CRVL(m, n) => Instruction::CRVL(m, n - 1),
-                                                Instruction::CREN(m, n) => Instruction::CREN(m, n - 1),
-                                                Instruction::ARMZ(m, n) => Instruction::ARMZ(m, n - 1),
-                                                Instruction::CRVI(m, n) => Instruction::CRVI(m, n - 1),
-                                                Instruction::ARMI(m, n) => Instruction::ARMI(m, n - 1),
-                                                _ => unreachable!(),
-                                            };
-                                            if let Some(a) = uso.carrega_de {
-                                                uso.carrega_de = Some((a.0, a.1 - 1));
-                                            }
-                                            if let Some(a) = uso.ref_de {
-                                                uso.ref_de = Some((a.0, a.1 - 1));
-                                            }
-                                            if let Some(a) = uso.armazena_em {
-                                                uso.armazena_em = Some((a.0, a.1 - 1));
-                                            }
-                                        }
-                                    }
-                                    //diminui em 1 o uso de memoria de todas as instrucoes entre a aloc e o DMEM
-                                    let instrucoes_subsequentes:Vec<_> = code.instructions_between(line.address,aloc.liberation_address.unwrap()).map(|line|line.address).skip(1).collect();
-                                    for instrucoes_subsequente in instrucoes_subsequentes{
-                                        if let Some(line) = code.instruction_mut(instrucoes_subsequente){
-                                            println!("{:?}",line);
-                                            if let Some(m) = line.initial_memory_usage.as_mut(){
-                                                *m = *m-1;
-                                            }
+                            println!("decrease_memory_alocation de {}", line.address);
+                            code.decrease_memory_alocation(line.address);
 
-                                        }
-                                    }
-
-
-                                    println!("Reduzindo DMEM de {}",aloc.liberation_address.unwrap());
-                                    // diminui um numero da DMEM (se atingir 0, remove a instrução)
-                                    if let Some(dealoc) = code.instruction_mut(aloc.liberation_address.unwrap())
-                                    {
-                                        dealoc.instruction = Instruction::DMEM(
-                                            if let Instruction::DMEM(n) = dealoc.instruction {
-                                                n-1
-                                            } else {
-                                                unreachable!()
-                                            },
-                                        )
-                                    }
-                                    
-                                    // se já removeu uma variavel, não lida com as outras para não usar info desatualizada (em lines_with_aloc_compativel)
-                                    break;
-                                }
-                            }                        
+                            // match line.instruction {
+                            //     //se alocação for CRCT, CRVL, CREN ou CRVI, remove a instrução
+                            //     Instruction::CRCT(_)
+                            //     | Instruction::CRVL(_, _)
+                            //     | Instruction::CREN(_, _)
+                            //     | Instruction::CRVI(_, _) => {
+                            //         code.remove_instruction_controlled(line.address, false);
+                            //     }
+                            //     //se alocação for AMEM:
+                            //     _ => {
+                            //         let tamanho = if let Instruction::AMEM(n) = line.instruction {
+                            //             n
+                            //         } else {
+                            //             panic!()
+                            //         };
+                            //         //diminui a alocação em uma unidade
+                            //         if let Some(line) = code.instruction_mut(line.address) {
+                            //             line.instruction = Instruction::AMEM(tamanho - 1);
+                            //             line.allocation.as_mut().unwrap().variaveis.remove(var_idx);
+                            //         }
+                            //         //localiza escopo
+                            //         let escopo = if code.get_fn_index(line.address).is_some() {
+                            //             1
+                            //         } else {
+                            //             0
+                            //         };
+                            //         // localiza endereço usado para acessar essa variavel
+                            //         let var_n = (aloc.nivel_memoria + var_idx) as i32;
+                            //         //localiza todos os usos, referencias e atribuicoes com numeros acima do removido, até a liberação
+                            //         let usos_subsequentes: Vec<usize> = code
+                            //             .instructions_between(
+                            //                 line.address,
+                            //                 aloc.liberation_address.unwrap(),
+                            //             )
+                            //             .filter_map(|line_between| match line_between.instruction {
+                            //                 Instruction::CRVL(m, n)
+                            //                 | Instruction::CREN(m, n)
+                            //                 | Instruction::ARMZ(m, n)
+                            //                 | Instruction::CRVI(m, n)
+                            //                 | Instruction::ARMI(m, n) => {
+                            //                     if m == escopo && n > var_n {
+                            //                         Some(line_between.address)
+                            //                     } else {
+                            //                         None
+                            //                     }
+                            //                 }
+                            //                 _ => None,
+                            //             })
+                            //             .collect();
+                            //         for uso in usos_subsequentes {
+                            //             //para cada um, diminui 1
+                            //             if let Some(uso) = code.instruction_mut(uso) {
+                            //                 uso.instruction = match uso.instruction {
+                            //                     Instruction::CRVL(m, n) => {
+                            //                         Instruction::CRVL(m, n - 1)
+                            //                     }
+                            //                     Instruction::CREN(m, n) => {
+                            //                         Instruction::CREN(m, n - 1)
+                            //                     }
+                            //                     Instruction::ARMZ(m, n) => {
+                            //                         Instruction::ARMZ(m, n - 1)
+                            //                     }
+                            //                     Instruction::CRVI(m, n) => {
+                            //                         Instruction::CRVI(m, n - 1)
+                            //                     }
+                            //                     Instruction::ARMI(m, n) => {
+                            //                         Instruction::ARMI(m, n - 1)
+                            //                     }
+                            //                     _ => unreachable!(),
+                            //                 };
+                            //                 if let Some(a) = uso.carrega_de {
+                            //                     uso.carrega_de = Some((a.0, a.1 - 1));
+                            //                 }
+                            //                 if let Some(a) = uso.ref_de {
+                            //                     uso.ref_de = Some((a.0, a.1 - 1));
+                            //                 }
+                            //                 if let Some(a) = uso.armazena_em {
+                            //                     uso.armazena_em = Some((a.0, a.1 - 1));
+                            //                 }
+                            //             }
+                            //         }
+                            //         //diminui em 1 o uso de memoria de todas as instrucoes entre a aloc e o DMEM
+                            //         let instrucoes_subsequentes: Vec<_> = code
+                            //             .instructions_between(
+                            //                 line.address,
+                            //                 aloc.liberation_address.unwrap(),
+                            //             )
+                            //             .map(|line| line.address)
+                            //             .skip(1)
+                            //             .collect();
+                            //         for instrucoes_subsequente in instrucoes_subsequentes {
+                            //             if let Some(line) =
+                            //                 code.instruction_mut(instrucoes_subsequente)
+                            //             {
+                            //                 println!("{:?}", line);
+                            //                 if let Some(m) = line.initial_memory_usage.as_mut() {
+                            //                     *m = *m - 1;
+                            //                 }
+                            //             }
+                            //         }
+                            //         println!(
+                            //             "Reduzindo DMEM de {}",
+                            //             aloc.liberation_address.unwrap()
+                            //         );
+                            //         // diminui um numero da DMEM (se atingir 0, remove a instrução)
+                            //         if let Some(dealoc) =
+                            //             code.instruction_mut(aloc.liberation_address.unwrap())
+                            //         {
+                            //             dealoc.instruction = Instruction::DMEM(
+                            //                 if let Instruction::DMEM(n) = dealoc.instruction {
+                            //                     n - 1
+                            //                 } else {
+                            //                     unreachable!()
+                            //                 },
+                            //             )
+                            //         }
+                            //         // se já removeu uma variavel, não lida com as outras para não usar info desatualizada (em lines_with_aloc_compativel)
+                            //         break;
+                            //     }
+                            // }
                         }
                     }
                 }
@@ -444,15 +516,19 @@ fn eliminar_variaveis_mortas(code: &mut CodeGraph) -> bool {
 }
 
 // elimina AMEM(0), DMEM(0) e NADA
-fn eliminar_inconsequentes(code:&mut CodeGraph) ->bool{
-    let inconsequentes:Vec<usize> = code.instructions_unordered().filter(|line|match line.instruction{
-        Instruction::AMEM(n)|Instruction::DMEM(n) => n==0,
-        Instruction::NADA =>true,
-        _=>false
-    }).map(|line|line.address).collect();
+// fn eliminar_inconsequentes(code: &mut CodeGraph) -> bool {
+//     let inconsequentes: Vec<usize> = code
+//         .instructions_unordered()
+//         .filter(|line| match line.instruction {
+//             Instruction::AMEM(n) | Instruction::DMEM(n) => n == 0,
+//             Instruction::NADA => true,
+//             _ => false,
+//         })
+//         .map(|line| line.address)
+//         .collect();
 
-    for i in &inconsequentes{
-        code.remove_instruction_controlled(*i, false);
-    }
-    inconsequentes.len()>0
-}
+//     for i in &inconsequentes {
+//         code.remove_instruction_controlled(*i, false);
+//     }
+//     inconsequentes.len() > 0
+// }
