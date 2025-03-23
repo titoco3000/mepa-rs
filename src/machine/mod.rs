@@ -76,6 +76,10 @@ impl<'a> MepaMachine<'a> {
         self.input = InputSource::Vec(input);
         self
     }
+    pub fn add_output(mut self, output: &'a mut Vec<i32>) -> Self {
+        self.output = Some(output);
+        self
+    }
     pub fn add_input<R: Read + 'static>(mut self, readable: R) -> Self {
         self.input = InputSource::readable(readable);
         self
@@ -343,7 +347,9 @@ impl<'a> MepaMachine<'a> {
             Err("End of instructions without PARA")
         }
     }
-
+    pub fn current_memory_usage(&self) -> i32 {
+        self.s
+    }
     pub fn execute(&mut self) -> Result<(), String> {
         while !self.ended() {
             self.execute_step()?;
@@ -371,11 +377,14 @@ pub fn interactive_execution(filename: &PathBuf, input: Vec<i32>) {
     println!("Program executed successfully");
 }
 
-pub fn execute(filename: &PathBuf, input: Vec<i32>) {
+pub fn execute(filename: &PathBuf, input: Vec<i32>, output: Option<&mut Vec<i32>>) {
     let mc = MepaCode::from_file(filename).unwrap();
     let mut machine = MepaMachine::new(mc);
     if input.len() > 0 {
         machine = machine.add_input_vec(input);
+    }
+    if let Some(output) = output {
+        machine = machine.add_output(output);
     }
     machine.execute().unwrap();
 }

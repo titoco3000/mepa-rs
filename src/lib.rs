@@ -1,4 +1,5 @@
 pub mod compiler;
+pub mod evaluator;
 pub mod machine;
 pub mod mepa;
 pub mod otimizador;

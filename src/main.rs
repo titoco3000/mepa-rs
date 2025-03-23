@@ -1,5 +1,6 @@
 use mepa_rs::{
     compiler::{compile, CompileError},
+    evaluator::evaluate,
     machine,
     otimizador::otimizar_arquivo,
 };
@@ -7,7 +8,7 @@ use mepa_rs::{
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 fn main() {
     if DEBUG {
@@ -22,12 +23,12 @@ fn main() {
             .arg(
                 Arg::new("action")
                     .required(true)
-                    .value_parser(["compile", "run", "debug", "optimize"])
-                    .help("Action to perform (compile, run, debug or optimize)"),
+                    .value_parser(["compile", "run", "debug", "optimize", "evaluate"])
+                    .help("Action to perform (compile, run, debug, optimize or evaluate)"),
             )
             .arg(
                 Arg::new("input")
-                    .required(true)
+                    .required(false) // Make it optional
                     .help("Input file for the action"),
             )
             .arg(
@@ -62,7 +63,12 @@ fn main() {
             .get_matches();
 
         let action = matches.get_one::<String>("action").unwrap();
-        let input_path = PathBuf::from(matches.get_one::<String>("input").unwrap());
+
+        let input_path = matches
+            .get_one::<String>("input")
+            .map(|s| Some(PathBuf::from(s)))
+            .unwrap_or_else(|| None);
+
         let output_path = matches
             .get_one::<String>("output")
             .map(|s| Some(PathBuf::from(s)))
@@ -77,56 +83,63 @@ fn main() {
         let should_debug = *matches.get_one::<bool>("debug").unwrap_or(&false);
         let should_optimize = *matches.get_one::<bool>("optimize").unwrap_or(&false);
 
-        // Handle directory or file input
-        if input_path.is_dir() {
-            let entries = fs::read_dir(&input_path).unwrap();
-            for entry in entries {
-                let entry = entry.unwrap();
-                let file_path = entry.path();
-                if file_path.is_file() {
-                    let p = match &output_path {
-                        Some(p) => p.clone(),
-                        None => {
-                            let mut p = PathBuf::from("output");
-                            p.push(format!(
-                                "{}.mepa",
-                                file_path.file_stem().unwrap().to_str().unwrap()
-                            ));
-                            p
-                        }
-                    };
-                    handle_action(
-                        action,
-                        &file_path,
-                        &p,
-                        should_run,
-                        should_debug,
-                        should_optimize,
-                        &input_values,
-                    );
+        if let Some(input_path) = input_path {
+            // Handle directory or file input
+            if input_path.is_dir() {
+                let entries = fs::read_dir(&input_path).unwrap();
+                for entry in entries {
+                    let entry = entry.unwrap();
+                    let file_path = entry.path();
+                    if file_path.is_file() {
+                        let p = match &output_path {
+                            Some(p) => p.clone(),
+                            None => {
+                                let mut p = PathBuf::from("output");
+                                p.push(format!(
+                                    "{}.mepa",
+                                    file_path.file_stem().unwrap().to_str().unwrap()
+                                ));
+                                p
+                            }
+                        };
+                        handle_action(
+                            action,
+                            &file_path,
+                            &p,
+                            should_run,
+                            should_debug,
+                            should_optimize,
+                            &input_values,
+                        );
+                    }
                 }
+            } else {
+                let p = match output_path {
+                    Some(p) => p,
+                    None => {
+                        let mut p = PathBuf::from("output");
+                        p.push(format!(
+                            "{}.mepa",
+                            input_path.file_stem().unwrap().to_str().unwrap()
+                        ));
+                        p
+                    }
+                };
+                handle_action(
+                    action,
+                    &input_path,
+                    &p,
+                    should_run,
+                    should_debug,
+                    should_optimize,
+                    &input_values,
+                );
             }
+        } else if action != "evaluate" {
+            eprintln!("Error: The 'input' argument is required for '{}'.", action);
+            std::process::exit(1);
         } else {
-            let p = match output_path {
-                Some(p) => p,
-                None => {
-                    let mut p = PathBuf::from("output");
-                    p.push(format!(
-                        "{}.mepa",
-                        input_path.file_stem().unwrap().to_str().unwrap()
-                    ));
-                    p
-                }
-            };
-            handle_action(
-                action,
-                &input_path,
-                &p,
-                should_run,
-                should_debug,
-                should_optimize,
-                &input_values,
-            );
+            evaluate();
         }
     }
 }
@@ -156,7 +169,7 @@ fn handle_action(
                         if should_debug {
                             machine::interactive_execution(&output_path, input_values.to_vec());
                         } else if should_run {
-                            machine::execute(&output_path, input_values.to_vec());
+                            machine::execute(&output_path, input_values.to_vec(), None);
                         }
                     }
                     Err(e) => println!("Erro de IO: {:?}", e),
@@ -172,7 +185,7 @@ fn handle_action(
             otimizar_arquivo(input_path).unwrap();
         }
         "run" => {
-            machine::execute(input_path, input_values.to_vec());
+            machine::execute(input_path, input_values.to_vec(), None);
         }
         "debug" => {
             machine::interactive_execution(input_path, input_values.to_vec());
