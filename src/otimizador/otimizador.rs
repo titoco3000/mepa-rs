@@ -232,49 +232,63 @@ fn propagar_constantes(code: &mut CodeGraph) -> bool {
             .collect();
 
         //para cada alocacao-destino
-        for aloc_addr in &aloc_addresses {
-            // cada CRVL que usa essa instrucao
-
-            let carregamentos: Vec<usize> = code
-                .instruction(aloc_addr.0)
+        for (aloc_addr, var) in &aloc_addresses {
+            // verifica se a atribuição é unica
+            let n_atribuicoes = code
+                .instruction(*aloc_addr)
+                .as_ref()
                 .unwrap()
                 .allocation
                 .as_ref()
                 .unwrap()
-                .variaveis[aloc_addr.1]
-                .usos
-                .clone()
-                .iter()
-                .filter_map(|addr| {
-                    let line = code.instruction(*addr).unwrap();
-                    if matches!(line.instruction, Instruction::CRVL(_, _)) {
-                        Some(line.address.clone())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+                .variaveis[*var]
+                .atribuicoes
+                .len();
 
-            // remove usos da lista, ja que vao ser removidos
-            if let Some(aloc) = &mut code
-                .instruction_mut(aloc_addr.0)
-                .unwrap()
-                .allocation
-                .as_mut()
-            {
-                for c in &carregamentos {
-                    aloc.variaveis[aloc_addr.1].usos.remove(&c);
+            if n_atribuicoes <= 1 {
+                // cada CRVL que usa essa instrucao
+
+                let carregamentos: Vec<usize> = code
+                    .instruction(*aloc_addr)
+                    .unwrap()
+                    .allocation
+                    .as_ref()
+                    .unwrap()
+                    .variaveis[*var]
+                    .usos
+                    .clone()
+                    .iter()
+                    .filter_map(|addr| {
+                        let line = code.instruction(*addr).unwrap();
+                        if matches!(line.instruction, Instruction::CRVL(_, _)) {
+                            Some(line.address.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                // remove usos da lista, ja que vao ser removidos
+                if let Some(aloc) = &mut code
+                    .instruction_mut(*aloc_addr)
+                    .unwrap()
+                    .allocation
+                    .as_mut()
+                {
+                    for c in &carregamentos {
+                        aloc.variaveis[*var].usos.remove(&c);
+                    }
                 }
-            }
-            for c in carregamentos {
-                if let Instruction::CRCT(n) = declaracao.instruction {
-                    if let Some(line) = code.instruction_mut(c) {
-                        println!(
-                            "Substituindo {} da linha {} por CRCT({})",
-                            line.instruction, c, n
-                        );
-                        line.instruction = Instruction::CRCT(n);
-                        mudou = true;
+                for c in carregamentos {
+                    if let Instruction::CRCT(n) = declaracao.instruction {
+                        if let Some(line) = code.instruction_mut(c) {
+                            println!(
+                                "Substituindo {} da linha {} por CRCT({})",
+                                line.instruction, c, n
+                            );
+                            line.instruction = Instruction::CRCT(n);
+                            mudou = true;
+                        }
                     }
                 }
             }
