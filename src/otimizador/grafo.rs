@@ -819,27 +819,29 @@ impl CodeGraph {
         let mut visited = HashSet::new();
         let mut stack = Vec::new();
 
-        let start_node = self.locate_address(addr_inicio).unwrap();
+        let start_node = (addr_inicio..addr_fim).find_map(|addr| self.locate_address(addr));
         let mut end_node = start_node;
-        stack.push(start_node.clone());
+        if let Some(start_node) = start_node {
+            stack.push(start_node.clone());
 
-        while let Some(node) = stack.pop() {
-            if self
-                .grafo
-                .node_weight(node)
-                .unwrap()
-                .iter()
-                .all(|line| line.address != addr_fim)
-            {
-                for vizinho in self.grafo.neighbors(node) {
-                    if !visited.contains(&vizinho) && !stack.contains(&vizinho) {
-                        stack.push(vizinho);
+            while let Some(node) = stack.pop() {
+                if self
+                    .grafo
+                    .node_weight(node)
+                    .unwrap()
+                    .iter()
+                    .all(|line| line.address != addr_fim)
+                {
+                    for vizinho in self.grafo.neighbors(node) {
+                        if !visited.contains(&vizinho) && !stack.contains(&vizinho) {
+                            stack.push(vizinho);
+                        }
                     }
+                } else {
+                    end_node = Some(node.clone());
                 }
-            } else {
-                end_node = node.clone();
+                visited.insert(node);
             }
-            visited.insert(node);
         }
         visited
             .into_iter()
@@ -848,8 +850,20 @@ impl CodeGraph {
                     .node_weight(node)
                     .unwrap()
                     .iter()
-                    .skip_while(move |inst| node == start_node && inst.address < addr_inicio)
-                    .take_while(move |inst| node != end_node || inst.address <= addr_fim)
+                    .skip_while(move |inst| {
+                        if let Some(start_node) = start_node {
+                            node == start_node && inst.address < addr_inicio
+                        } else {
+                            false
+                        }
+                    })
+                    .take_while(move |inst| {
+                        if let Some(end_node) = end_node {
+                            node != end_node || inst.address <= addr_fim
+                        } else {
+                            false
+                        }
+                    })
             })
             .flatten()
     }

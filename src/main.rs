@@ -8,7 +8,7 @@ use mepa_rs::{
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 fn main() {
     if DEBUG {
