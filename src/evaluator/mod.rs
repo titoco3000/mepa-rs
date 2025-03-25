@@ -24,7 +24,9 @@ impl ExecutionInfo {
             .add_output(&mut info.output);
         while !machine.ended() {
             machine.execute_step()?;
-            info.max_memory = info.max_memory.max(machine.current_memory_usage() as usize);
+            info.max_memory = info
+                .max_memory
+                .max(machine.current_memory_usage().max(0) as usize);
             info.steps += 1
         }
 
