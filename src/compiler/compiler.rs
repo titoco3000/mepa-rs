@@ -964,11 +964,11 @@ pub fn compile(
 ) -> Result<io::Result<()>, CompileError> {
     let mut c = Compiler::new(origin)?;
     c.program()?;
-    println!("Compilado com sucesso!");
+    // println!("Compilado com sucesso!");
     if otimizar {
-        let otimizado = otimizador::otimizar(c.generated_code);
+        let otimizado = otimizador::Otimizador::from(c.generated_code);
         println!("Otimizado com sucesso!");
-        Ok(otimizado.to_file(target))
+        Ok(otimizado.save_at(target))
     } else {
         Ok(c.generated_code.to_file(target))
     }

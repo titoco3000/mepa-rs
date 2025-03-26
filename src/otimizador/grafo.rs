@@ -446,7 +446,6 @@ impl CodeGraph {
                         Instruction::DMEM(n) => -n,
                         Instruction::RTPR(_, _n) => -2, // ignora o 'n' para só ser considerado na chamada
                         Instruction::CHPR(k) => {
-                            println!("Chamada a  funcao {}", k);
                             //localiza a funcao
                             let func = self
                                 .funcoes
@@ -684,7 +683,7 @@ impl CodeGraph {
                 self.instruction_mut(addr).unwrap().allocation = Some(aloc);
             }
         }
-        self.debug_print();
+        // self.debug_print();
     }
 
     // mapeia todas as informações de funções, exceto quando são chamadas
@@ -878,11 +877,6 @@ impl CodeGraph {
             .instructions_between(addr_inicio, addr_fim)
             .map(|line| line.address)
             .collect();
-
-        println!(
-            "instructions_between {} and {}: {:?}",
-            addr_inicio, addr_fim, addrs
-        );
 
         for addr in addrs {
             if let Some(instr) = self.instruction_mut(addr) {
@@ -1305,7 +1299,8 @@ impl CodeGraph {
                                 if aloc.variaveis[i].usos.is_empty()
                                     && aloc.variaveis[i].referencias.is_empty()
                                 {
-                                    println!("Vou remover var {}/{}", i, aloc.variaveis.len());
+                                    // println!("Vou remover var {}/{}", i, aloc.variaveis.len());
+
                                     // Se for uma sem uso ou ref
                                     // (supoe que atribuições ja foram removidas)
                                     // remove ela e para o loop
@@ -1456,30 +1451,30 @@ impl CodeGraph {
             .flatten()
     }
 
-    fn debug_print(&self) {
-        println!("-------CODE-----------------");
-        for node in self.grafo.node_indices() {
-            println!("Node {}", node.index());
-            for line in self.grafo.node_weight(node).unwrap() {
-                if let Some(aloc) = &line.allocation {
-                    if let Some(var) = aloc.variaveis.get(0) {
-                        print!("{:?}", var.usos);
-                    }
-                }
-                println!("    {}: {:?}", line.address, line.instruction);
-            }
-        }
-        println!("edges:");
-        for edge in self.grafo.edge_indices() {
-            let edge = self.grafo.edge_endpoints(edge).unwrap();
-            println!("    {} -> {}", edge.0.index(), edge.1.index());
-        }
-        println!("fn:");
-        for f in &self.funcoes {
-            println!("    {}: usos: {:?}", f.addr_inicio, f.usos);
-        }
-        println!("----------------------------");
-    }
+    // fn debug_print(&self) {
+    //     println!("-------CODE-----------------");
+    //     for node in self.grafo.node_indices() {
+    //         println!("Node {}", node.index());
+    //         for line in self.grafo.node_weight(node).unwrap() {
+    //             if let Some(aloc) = &line.allocation {
+    //                 if let Some(var) = aloc.variaveis.get(0) {
+    //                     print!("{:?}", var.usos);
+    //                 }
+    //             }
+    //             println!("    {}: {:?}", line.address, line.instruction);
+    //         }
+    //     }
+    //     println!("edges:");
+    //     for edge in self.grafo.edge_indices() {
+    //         let edge = self.grafo.edge_endpoints(edge).unwrap();
+    //         println!("    {} -> {}", edge.0.index(), edge.1.index());
+    //     }
+    //     println!("fn:");
+    //     for f in &self.funcoes {
+    //         println!("    {}: usos: {:?}", f.addr_inicio, f.usos);
+    //     }
+    //     println!("----------------------------");
+    // }
 }
 
 pub fn remover_rotulos_simbolicos(mc: MepaCode) -> MepaCode {

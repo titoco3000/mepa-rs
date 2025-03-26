@@ -5,63 +5,109 @@ use crate::mepa::label::Label;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-pub fn otimizar_arquivo<P>(filename: P) -> io::Result<()>
+pub struct Otimizador<P>
 where
     P: AsRef<Path>,
 {
-    let code = otimizar(MepaCode::from_file(&filename)?);
-
-    code.to_file(&filename).unwrap();
-    Ok(())
+    code: CodeGraph,
+    verbose_level: usize,
+    file_path: Option<P>,
 }
 
-pub fn otimizar(code: MepaCode) -> MepaCode {
-    let c = code;
-    let mut code = CodeGraph::new(c.clone());
-
-    code.export_to_file(&PathBuf::from("output/debug/antes.dot"))
-        .unwrap();
-
-    code.open_browser_visualization()
-        .expect("Falha ao abrir visualizacao");
-
-    code.print_vars();
-
-    let functions = [
-        fluxo,
-        elimidar_codigo_morto,
-        propagar_constantes,
-        eliminar_variaveis_mortas,
-    ];
-
-    loop {
-        let mut mudou = false;
-
-        for &func in &functions {
-            while func(&mut code) {
-                mudou = true;
-            }
-        }
-
-        if !mudou {
-            break;
+impl<P> Otimizador<P>
+where
+    P: AsRef<Path>,
+{
+    pub fn new(code: MepaCode, file_path: Option<P>) -> Self {
+        let code = CodeGraph::new(code);
+        Otimizador {
+            code,
+            verbose_level: 0,
+            file_path,
         }
     }
 
-    code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
-        .unwrap();
-    code.open_browser_visualization()
-        .expect("Falha ao abrir visualizacao");
+    pub fn verbose(mut self) -> Self {
+        self.verbose_level = 1;
+        self
+    }
 
-    code.to_mepa_code()
+    pub fn otimizar(mut self) -> Self {
+        let functions = [
+            fluxo,
+            elimidar_codigo_morto,
+            propagar_constantes,
+            eliminar_variaveis_mortas,
+        ];
+
+        loop {
+            let mut mudou = false;
+
+            for &func in &functions {
+                while func(&mut self.code) {
+                    mudou = true;
+                }
+            }
+
+            if !mudou {
+                break;
+            }
+        }
+        return self;
+        // code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
+        //     .unwrap();
+        // code.open_browser_visualization()
+        //     .expect("Falha ao abrir visualizacao");
+
+        // code.to_mepa_code()
+    }
+    pub fn save(self) -> io::Result<()> {
+        if let Some(file_path) = self.file_path {
+            let code = self.code.to_mepa_code();
+            code.to_file(&file_path)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                "No file path provided",
+            ))
+        }
+    }
+
+    pub fn save_at(mut self, file_path: P) -> io::Result<()> {
+        self.file_path = Some(file_path);
+        self.save()
+    }
+}
+
+impl<P> From<P> for Otimizador<P>
+where
+    P: AsRef<Path>,
+{
+    fn from(filename: P) -> Self {
+        let raw_code =
+            MepaCode::from_file(&filename).expect("Falha ao abrir arquivo para otimizar");
+        Otimizador::new(raw_code, Some(filename))
+    }
+}
+
+impl<P> From<MepaCode> for Otimizador<P>
+where
+    P: AsRef<Path>,
+{
+    fn from(code: MepaCode) -> Self {
+        Otimizador {
+            code: CodeGraph::new(code),
+            verbose_level: 0,
+            file_path: None,
+        }
+    }
 }
 
 //se tem um desvio que cai em outro desvio, pula direto para pos final
 //retorna se mudou algo
 fn fluxo(code: &mut CodeGraph) -> bool {
-    println!("Otimizando fluxo");
     // cria vec de (origem, destino)
     let mut desvio_para_desvio: Vec<(usize, usize)> = code
         .grafo
@@ -138,17 +184,7 @@ fn fluxo(code: &mut CodeGraph) -> bool {
 
 //se tem codigo inacessivel, remove
 fn elimidar_codigo_morto(code: &mut CodeGraph) -> bool {
-    println!("Eliminando codigo morto");
     let mut mudou = false;
-    // for node in code.grafo.node_indices() {
-    //     println!("Verificando o node {}:", node.index());
-    //     println!(
-    //         "    incoming: {}:",
-    //         code.grafo
-    //             .edges_directed(node, petgraph::Direction::Incoming)
-    //             .count()
-    //     );
-    // }
 
     // acha nodes inacessiveis
     let inacessiveis: Vec<NodeIndex> = code
@@ -282,10 +318,6 @@ fn propagar_constantes(code: &mut CodeGraph) -> bool {
                 for c in carregamentos {
                     if let Instruction::CRCT(n) = declaracao.instruction {
                         if let Some(line) = code.instruction_mut(c) {
-                            println!(
-                                "Substituindo {} da linha {} por CRCT({})",
-                                line.instruction, c, n
-                            );
                             line.instruction = Instruction::CRCT(n);
                             mudou = true;
                         }
@@ -367,159 +399,11 @@ fn eliminar_variaveis_mortas(code: &mut CodeGraph) -> bool {
                                     .usos
                                     .remove(atribuicao);
                             }
-
-                            // let mut carregava_de = None;
-                            // if let Some(attr_line) = code.instruction_mut(*atribuicao) {
-                            //     if !matches!(attr_line.instruction, Instruction::CHPR(_)) {
-                            //         println!(
-                            //             "Substituindo {}: {} por DMEM(1). Ele Carregava de {:?}",
-                            //             attr_line.address,
-                            //             attr_line.instruction,
-                            //             attr_line.carrega_de
-                            //         );
-                            //         attr_line.instruction = Instruction::DMEM(1);
-                            //         attr_line.armazena_em = None;
-                            //         carregava_de = attr_line.carrega_de;
-                            //         attr_line.carrega_de = None;
-                            //         mudou = true;
-                            //     } else {
-                            //         atribuido_por_procedimento = true;
-                            //     }
-                            // }
-                            // if let Some((addr, idx)) = carregava_de {
-                            //     if let Some(line) = code.instruction_mut(addr) {
-                            //         line.allocation.as_mut().unwrap().variaveis[idx]
-                            //             .usos
-                            //             .remove(atribuicao);
-                            //     }
-                            // }
                         }
                         // se não foi atribuido por procedimento, pode remover a sua alocação
                         if !algum_atribuido_por_procedimento {
                             mudou = true;
-                            println!("decrease_memory_alocation de {}", line.address);
                             code.decrease_memory_alocation(line.address);
-
-                            // match line.instruction {
-                            //     //se alocação for CRCT, CRVL, CREN ou CRVI, remove a instrução
-                            //     Instruction::CRCT(_)
-                            //     | Instruction::CRVL(_, _)
-                            //     | Instruction::CREN(_, _)
-                            //     | Instruction::CRVI(_, _) => {
-                            //         code.remove_instruction_controlled(line.address, false);
-                            //     }
-                            //     //se alocação for AMEM:
-                            //     _ => {
-                            //         let tamanho = if let Instruction::AMEM(n) = line.instruction {
-                            //             n
-                            //         } else {
-                            //             panic!()
-                            //         };
-                            //         //diminui a alocação em uma unidade
-                            //         if let Some(line) = code.instruction_mut(line.address) {
-                            //             line.instruction = Instruction::AMEM(tamanho - 1);
-                            //             line.allocation.as_mut().unwrap().variaveis.remove(var_idx);
-                            //         }
-                            //         //localiza escopo
-                            //         let escopo = if code.get_fn_index(line.address).is_some() {
-                            //             1
-                            //         } else {
-                            //             0
-                            //         };
-                            //         // localiza endereço usado para acessar essa variavel
-                            //         let var_n = (aloc.nivel_memoria + var_idx) as i32;
-                            //         //localiza todos os usos, referencias e atribuicoes com numeros acima do removido, até a liberação
-                            //         let usos_subsequentes: Vec<usize> = code
-                            //             .instructions_between(
-                            //                 line.address,
-                            //                 aloc.liberation_address.unwrap(),
-                            //             )
-                            //             .filter_map(|line_between| match line_between.instruction {
-                            //                 Instruction::CRVL(m, n)
-                            //                 | Instruction::CREN(m, n)
-                            //                 | Instruction::ARMZ(m, n)
-                            //                 | Instruction::CRVI(m, n)
-                            //                 | Instruction::ARMI(m, n) => {
-                            //                     if m == escopo && n > var_n {
-                            //                         Some(line_between.address)
-                            //                     } else {
-                            //                         None
-                            //                     }
-                            //                 }
-                            //                 _ => None,
-                            //             })
-                            //             .collect();
-                            //         for uso in usos_subsequentes {
-                            //             //para cada um, diminui 1
-                            //             if let Some(uso) = code.instruction_mut(uso) {
-                            //                 uso.instruction = match uso.instruction {
-                            //                     Instruction::CRVL(m, n) => {
-                            //                         Instruction::CRVL(m, n - 1)
-                            //                     }
-                            //                     Instruction::CREN(m, n) => {
-                            //                         Instruction::CREN(m, n - 1)
-                            //                     }
-                            //                     Instruction::ARMZ(m, n) => {
-                            //                         Instruction::ARMZ(m, n - 1)
-                            //                     }
-                            //                     Instruction::CRVI(m, n) => {
-                            //                         Instruction::CRVI(m, n - 1)
-                            //                     }
-                            //                     Instruction::ARMI(m, n) => {
-                            //                         Instruction::ARMI(m, n - 1)
-                            //                     }
-                            //                     _ => unreachable!(),
-                            //                 };
-                            //                 if let Some(a) = uso.carrega_de {
-                            //                     uso.carrega_de = Some((a.0, a.1 - 1));
-                            //                 }
-                            //                 if let Some(a) = uso.ref_de {
-                            //                     uso.ref_de = Some((a.0, a.1 - 1));
-                            //                 }
-                            //                 if let Some(a) = uso.armazena_em {
-                            //                     uso.armazena_em = Some((a.0, a.1 - 1));
-                            //                 }
-                            //             }
-                            //         }
-                            //         //diminui em 1 o uso de memoria de todas as instrucoes entre a aloc e o DMEM
-                            //         let instrucoes_subsequentes: Vec<_> = code
-                            //             .instructions_between(
-                            //                 line.address,
-                            //                 aloc.liberation_address.unwrap(),
-                            //             )
-                            //             .map(|line| line.address)
-                            //             .skip(1)
-                            //             .collect();
-                            //         for instrucoes_subsequente in instrucoes_subsequentes {
-                            //             if let Some(line) =
-                            //                 code.instruction_mut(instrucoes_subsequente)
-                            //             {
-                            //                 println!("{:?}", line);
-                            //                 if let Some(m) = line.initial_memory_usage.as_mut() {
-                            //                     *m = *m - 1;
-                            //                 }
-                            //             }
-                            //         }
-                            //         println!(
-                            //             "Reduzindo DMEM de {}",
-                            //             aloc.liberation_address.unwrap()
-                            //         );
-                            //         // diminui um numero da DMEM (se atingir 0, remove a instrução)
-                            //         if let Some(dealoc) =
-                            //             code.instruction_mut(aloc.liberation_address.unwrap())
-                            //         {
-                            //             dealoc.instruction = Instruction::DMEM(
-                            //                 if let Instruction::DMEM(n) = dealoc.instruction {
-                            //                     n - 1
-                            //                 } else {
-                            //                     unreachable!()
-                            //                 },
-                            //             )
-                            //         }
-                            //         // se já removeu uma variavel, não lida com as outras para não usar info desatualizada (em lines_with_aloc_compativel)
-                            //         break;
-                            //     }
-                            // }
                         }
                     }
                 }

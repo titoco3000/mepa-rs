@@ -2,7 +2,7 @@ use mepa_rs::{
     compiler::{compile, CompileError},
     evaluator::evaluate,
     machine,
-    otimizador::otimizar_arquivo,
+    otimizador::Otimizador,
 };
 
 use clap::{Arg, Command};
@@ -182,7 +182,10 @@ fn handle_action(
             }
         }
         "optimize" => {
-            otimizar_arquivo(input_path).unwrap();
+            Otimizador::from(input_path)
+                .otimizar()
+                .save()
+                .expect("Erro ao salvar arquivo otimizado");
         }
         "run" => {
             machine::execute(input_path, input_values.to_vec(), None);

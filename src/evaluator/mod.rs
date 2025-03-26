@@ -1,5 +1,5 @@
 use crate::{
-    compiler::compile, machine::MepaMachine, mepa::code::MepaCode, otimizador::otimizar_arquivo,
+    compiler::compile, machine::MepaMachine, mepa::code::MepaCode, otimizador::Otimizador,
 };
 use std::path::PathBuf;
 
@@ -41,7 +41,10 @@ pub fn evaluate() {
         return;
     }
 
-    let work_material = [("acesso-aleatorio", vec![1], vec![20])];
+    let work_material = [
+        ("acesso-aleatorio", vec![1], vec![20]),
+        ("cod-morto", vec![], vec![]),
+    ];
 
     for (filename, input, expected_output) in work_material.iter() {
         let input_path = samples_dir.join(format!("{}.ipt", filename));
@@ -59,7 +62,11 @@ pub fn evaluate() {
                     continue;
                 }
 
-                otimizar_arquivo(&output_path).unwrap();
+                Otimizador::from(&output_path)
+                    .otimizar()
+                    .save()
+                    .expect("Falha ao salvar arquivo otimizado");
+
                 let optimized_exec_info = ExecutionInfo::new(&output_path, input.clone()).unwrap();
                 if optimized_exec_info.output != *expected_output {
                     println!("{} failed (optimized)", filename);
