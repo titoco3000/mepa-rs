@@ -4,6 +4,7 @@ use crate::mepa::instruction::Instruction;
 use crate::mepa::label::Label;
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
+use std::error::Error;
 use std::io;
 use std::path::Path;
 
@@ -20,13 +21,21 @@ impl<P> Otimizador<P>
 where
     P: AsRef<Path>,
 {
-    pub fn new(code: MepaCode, file_path: Option<P>) -> Self {
+    pub fn new(code: MepaCode, file_path: Option<P>) -> Result<Self, Box<dyn Error>> {
         let code = CodeGraph::new(code);
-        Otimizador {
+        if !code.memoria_consistente {
+            return Err("Memoria inconsistente; não é possivel otimizar".into());
+        }
+        Ok(Otimizador {
             code,
             verbose_level: 0,
             file_path,
-        }
+        })
+    }
+
+    pub fn from_file(file_path: P) -> Result<Self, Box<dyn Error>> {
+        let raw_code = MepaCode::from_file(&file_path)?;
+        Otimizador::new(raw_code, Some(file_path))
     }
 
     pub fn verbose(mut self) -> Self {
@@ -82,17 +91,6 @@ where
     pub fn save_at(mut self, file_path: P) -> io::Result<()> {
         self.file_path = Some(file_path);
         self.save()
-    }
-}
-
-impl<P> From<P> for Otimizador<P>
-where
-    P: AsRef<Path>,
-{
-    fn from(filename: P) -> Self {
-        let raw_code =
-            MepaCode::from_file(&filename).expect("Falha ao abrir arquivo para otimizar");
-        Otimizador::new(raw_code, Some(filename))
     }
 }
 

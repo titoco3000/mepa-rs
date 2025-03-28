@@ -49,7 +49,7 @@ pub fn evaluate() {
         ("global-var", vec![], vec![7]),
         ("indirecao", vec![], vec![]),
         ("inner", vec![], vec![20]),
-        // ("lifetime", vec![], vec![]),
+        ("lifetime", vec![], vec![]),
         ("movimentacao", vec![], vec![0, 1, 2, 3, 4]),
         ("sort", vec![], vec![2, 1, 3, 2, 1, 3, 1, 2, 3]),
     ];
@@ -69,32 +69,37 @@ pub fn evaluate() {
                     );
                     continue;
                 }
+                match Otimizador::from_file(&output_path) {
+                    Ok(otm) => {
+                        otm.otimizar()
+                            .save()
+                            .expect("Falha ao salvar arquivo otimizado");
+                        let optimized_exec_info =
+                            ExecutionInfo::new(&output_path, input.clone()).unwrap();
+                        if optimized_exec_info.output != *expected_output {
+                            println!("{} failed (optimized)", filename);
+                            println!(
+                                "\texpected {:?}, got {:?}",
+                                expected_output, optimized_exec_info.output
+                            );
+                            continue;
+                        }
 
-                Otimizador::from(&output_path)
-                    .otimizar()
-                    .save()
-                    .expect("Falha ao salvar arquivo otimizado");
-
-                let optimized_exec_info = ExecutionInfo::new(&output_path, input.clone()).unwrap();
-                if optimized_exec_info.output != *expected_output {
-                    println!("{} failed (optimized)", filename);
-                    println!(
-                        "\texpected {:?}, got {:?}",
-                        expected_output, optimized_exec_info.output
-                    );
-                    continue;
+                        println!(
+                            "{} passed: {} → {} steps, {} → {} max memory, {} → {} instructions",
+                            filename,
+                            exec_info.steps,
+                            optimized_exec_info.steps,
+                            exec_info.max_memory,
+                            optimized_exec_info.max_memory,
+                            exec_info.instructions,
+                            optimized_exec_info.instructions
+                        );
+                    }
+                    Err(e) => {
+                        println!("{} falhou: {:?}", filename, e)
+                    }
                 }
-
-                println!(
-                    "{} passed: {} → {} steps, {} → {} max memory, {} → {} instructions",
-                    filename,
-                    exec_info.steps,
-                    optimized_exec_info.steps,
-                    exec_info.max_memory,
-                    optimized_exec_info.max_memory,
-                    exec_info.instructions,
-                    optimized_exec_info.instructions
-                );
             }
             Err(e) => println!("Failed to compile {}: {:?}", filename, e),
         }

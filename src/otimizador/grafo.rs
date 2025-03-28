@@ -231,6 +231,10 @@ impl CodeGraph {
         while let Some((addr, initial_value)) = bases_mapeamento.pop() {
             let raiz = self.locate_address(addr).unwrap();
             let current_func = self.get_fn_index(self.grafo.node_weight(raiz).unwrap()[0].address);
+            // println!(
+            //     "Mapeando a partir de {}",
+            //     self.grafo.node_weight(raiz).unwrap()[0].address
+            // );
             // valores da instrucao
             for line in self.grafo.node_weight_mut(raiz).unwrap() {
                 if line.address == addr {
@@ -284,6 +288,7 @@ impl CodeGraph {
                                         });
                                         if !achou {
                                             self.memoria_consistente = false;
+                                            println!("Memoria se torna inconsistente na linha {} de grafo.rs",line!());
                                             return;
                                         }
                                     }
@@ -320,6 +325,7 @@ impl CodeGraph {
                                         });
                                         if !achou {
                                             self.memoria_consistente = false;
+                                            println!("Memoria se torna inconsistente na linha {} de grafo.rs",line!());
                                             return;
                                         }
                                     }
@@ -356,6 +362,7 @@ impl CodeGraph {
                                         });
                                         if !achou {
                                             self.memoria_consistente = false;
+                                            println!("Memoria se torna inconsistente na linha {} de grafo.rs",line!());
                                             return;
                                         }
                                     }
@@ -401,6 +408,10 @@ impl CodeGraph {
                             });
                             if !achou {
                                 self.memoria_consistente = false;
+                                println!(
+                                    "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                    line!()
+                                );
                                 return;
                             }
                             -1
@@ -426,6 +437,7 @@ impl CodeGraph {
                                         });
                                         if !achou {
                                             self.memoria_consistente = false;
+                                            println!("Memoria se torna inconsistente na linha {} de grafo.rs",line!());
                                             return;
                                         }
                                     }
@@ -475,6 +487,10 @@ impl CodeGraph {
                                 });
                                 if !achou {
                                     self.memoria_consistente = false;
+                                    println!(
+                                        "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                        line!()
+                                    );
                                     return;
                                 }
                             }
@@ -496,6 +512,10 @@ impl CodeGraph {
                                 });
                                 if !achou {
                                     self.memoria_consistente = false;
+                                    println!(
+                                        "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                        line!()
+                                    );
                                     return;
                                 }
                             }
@@ -517,6 +537,10 @@ impl CodeGraph {
                                 });
                                 if !achou {
                                     self.memoria_consistente = false;
+                                    println!(
+                                        "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                        line!()
+                                    );
                                     return;
                                 }
                             }
@@ -529,6 +553,10 @@ impl CodeGraph {
                     // verifica se memoria total não será negativa, caso que invalida mapeamento
                     if memory_delta < 0 && memory < (-memory_delta) as usize {
                         self.memoria_consistente = false;
+                        println!(
+                            "Memoria se torna inconsistente na linha {} de grafo.rs",
+                            line!()
+                        );
                         return;
                     }
                     memory = (memory as i32 + memory_delta) as usize;
@@ -539,6 +567,16 @@ impl CodeGraph {
                             memory - memory_delta as usize,
                         ));
                     } else if memory_delta < 0 {
+                        // println!("Allocation Stack durante addr {}:", lines[line_idx].address);
+                        // for a in &alocation_stack {
+                        //     println!(
+                        //         "{}: inicial({}), vars({})",
+                        //         a.addr,
+                        //         a.nivel_memoria,
+                        //         a.variaveis.len()
+                        //     );
+                        // }
+
                         // se for uma desaloc que usa o valor, adiciona como uso
                         match &lines[line_idx].instruction {
                             Instruction::DMEM(_) | Instruction::RTPR(_, _) => (),
@@ -548,6 +586,10 @@ impl CodeGraph {
                                     // lines[line_idx].carrega_de = Some((item.addr, 0));
                                 } else {
                                     self.memoria_consistente = false;
+                                    println!(
+                                        "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                        line!()
+                                    );
                                     return;
                                 }
                             }
@@ -610,6 +652,10 @@ impl CodeGraph {
 
                                 if a_liberar < 0 {
                                     self.memoria_consistente = false;
+                                    println!(
+                                        "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                        line!()
+                                    );
                                     return;
                                 }
                             }
@@ -639,6 +685,10 @@ impl CodeGraph {
                         if existing_value != memory as usize {
                             // falhou o mapeamento
                             self.memoria_consistente = false;
+                            println!(
+                                "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                line!()
+                            );
                             return;
                         }
                     }
@@ -667,6 +717,10 @@ impl CodeGraph {
                         if existing_value != memory as usize {
                             // falhou o mapeamento
                             self.memoria_consistente = false;
+                            println!(
+                                "Memoria se torna inconsistente na linha {} de grafo.rs",
+                                line!()
+                            );
                         }
                     }
                     neighbor.initial_memory_usage = Some(memory as usize);

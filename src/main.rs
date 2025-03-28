@@ -16,9 +16,9 @@ fn main() {
         compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, false)
             .unwrap()
             .unwrap();
-        let mut otm = Otimizador::from(&output_path);
-        otm.open_browser_visualization()
-            .expect("Falha ao abrir no navegador");
+        let mut otm = Otimizador::from_file(&output_path).unwrap();
+        // otm.open_browser_visualization()
+        //     .expect("Falha ao abrir no navegador");
         otm = otm.otimizar();
         otm.open_browser_visualization()
             .expect("Falha ao abrir no navegador");
@@ -189,7 +189,8 @@ fn handle_action(
             }
         }
         "optimize" => {
-            Otimizador::from(input_path)
+            Otimizador::from_file(input_path)
+                .expect("Não foi possível otimizar o arquivo")
                 .otimizar()
                 .save()
                 .expect("Erro ao salvar arquivo otimizado");
