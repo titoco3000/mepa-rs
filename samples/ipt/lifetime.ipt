@@ -4,6 +4,7 @@ fn inutil(){
 
 fn main(){
     int arr[3], x;
+    x=1;
     if(x)
         x = inutil();
 

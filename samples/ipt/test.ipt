@@ -1,12 +1,12 @@
+fn inutil(){
+    return 1;
+}
+
 fn main(){
-    int arr[3];
-    int v[3], x;
+    int arr[3], x;
+    x=1;
+    if(x)
+        x = inutil();
 
-    v[0] = 10;
-    v[1] = 20;
-    v[2] = 30;
-
-    read(x);
-
-    print(v[x]);    
+    return 0;
 }

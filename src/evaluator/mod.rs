@@ -44,6 +44,14 @@ pub fn evaluate() {
     let work_material = [
         ("acesso-aleatorio", vec![1], vec![20]),
         ("cod-morto", vec![], vec![]),
+        ("copia", vec![], vec![12]),
+        ("deadvar", vec![13], vec![13]),
+        ("global-var", vec![], vec![7]),
+        ("indirecao", vec![], vec![]),
+        ("inner", vec![], vec![20]),
+        // ("lifetime", vec![], vec![]),
+        ("movimentacao", vec![], vec![0, 1, 2, 3, 4]),
+        ("sort", vec![], vec![2, 1, 3, 2, 1, 3, 1, 2, 3]),
     ];
 
     for (filename, input, expected_output) in work_material.iter() {

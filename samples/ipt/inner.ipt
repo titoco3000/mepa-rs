@@ -3,5 +3,6 @@ fn main(){
     arr[0] = 20;
     arr[1] = 0;
     x = arr[arr[1]];
+    print(x);
     return x;
 }

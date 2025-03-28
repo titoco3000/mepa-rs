@@ -13,9 +13,16 @@ const DEBUG: bool = false;
 fn main() {
     if DEBUG {
         let output_path = PathBuf::from("output/test.mepa");
-        compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, true)
+        compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, false)
             .unwrap()
             .unwrap();
+        let mut otm = Otimizador::from(&output_path);
+        otm.open_browser_visualization()
+            .expect("Falha ao abrir no navegador");
+        otm = otm.otimizar();
+        otm.open_browser_visualization()
+            .expect("Falha ao abrir no navegador");
+        otm.save().expect("Falha ao salvar otimizado");
         machine::interactive_execution(&output_path, vec![]);
     } else {
         let matches = Command::new("MepaC")

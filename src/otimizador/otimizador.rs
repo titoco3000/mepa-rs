@@ -34,6 +34,10 @@ where
         self
     }
 
+    pub fn open_browser_visualization(&self) -> Result<(), std::io::Error> {
+        self.code.open_browser_visualization()
+    }
+
     pub fn otimizar(mut self) -> Self {
         let functions = [
             fluxo,
