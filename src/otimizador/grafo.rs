@@ -231,10 +231,7 @@ impl CodeGraph {
         while let Some((addr, initial_value)) = bases_mapeamento.pop() {
             let raiz = self.locate_address(addr).unwrap();
             let current_func = self.get_fn_index(self.grafo.node_weight(raiz).unwrap()[0].address);
-            // println!(
-            //     "Mapeando a partir de {}",
-            //     self.grafo.node_weight(raiz).unwrap()[0].address
-            // );
+
             // valores da instrucao
             for line in self.grafo.node_weight_mut(raiz).unwrap() {
                 if line.address == addr {
@@ -261,6 +258,8 @@ impl CodeGraph {
                 } else {
                     self.grafo.node_weight_mut(visited).unwrap()
                 };
+
+                // println!("Mapeando a partir de {}", lines[0].address);
 
                 let mut memory: usize = lines.first().unwrap().initial_memory_usage.unwrap();
                 for line_idx in 0..lines.len() {
@@ -697,14 +696,54 @@ impl CodeGraph {
 
                 visited_nodes.push(visited);
 
-                let mut neighbors: Vec<NodeIndex> =
-                    self.grafo.neighbors(visited).into_iter().collect();
+                // list of neighbors and their reachables
+                use std::collections::HashSet;
 
-                // faz antes nodes que voltam ao atual
-                neighbors.sort_by_key(|&n| {
-                    petgraph::algo::has_path_connecting(&self.grafo, n, visited, None)
+                let mut neighbors: Vec<(NodeIndex, Vec<NodeIndex>)> = self
+                    .grafo
+                    .neighbors(visited)
+                    .into_iter()
+                    .map(|n| {
+                        let mut dfs = Dfs::new(&self.grafo, n);
+                        let reachable: Vec<NodeIndex> =
+                            std::iter::from_fn(|| dfs.next(&self.grafo)).collect();
+                        (n, reachable)
+                    })
+                    .collect();
+
+                // Precompute a HashSet for quick lookup instead of borrowing `neighbors` during sorting
+                let reachable_from_any: HashSet<NodeIndex> = neighbors
+                    .iter()
+                    .flat_map(|(_, neighs)| neighs)
+                    .copied()
+                    .collect();
+
+                neighbors.sort_by(|(a, a_neighbors), (b, b_neighbors)| {
+                    let a_has_path_to_visited = a_neighbors.contains(&visited);
+                    let b_has_path_to_visited = b_neighbors.contains(&visited);
+
+                    if a_has_path_to_visited && !b_has_path_to_visited {
+                        std::cmp::Ordering::Less
+                    } else if !a_has_path_to_visited && b_has_path_to_visited {
+                        std::cmp::Ordering::Greater
+                    } else {
+                        let a_has_path_to_any = reachable_from_any.contains(a);
+                        let b_has_path_to_any = reachable_from_any.contains(b);
+
+                        if a_has_path_to_any && !b_has_path_to_any {
+                            std::cmp::Ordering::Less
+                        } else if !a_has_path_to_any && b_has_path_to_any {
+                            std::cmp::Ordering::Greater
+                        } else {
+                            std::cmp::Ordering::Equal
+                        }
+                    }
                 });
 
+                let neighbors: Vec<NodeIndex> =
+                    neighbors.into_iter().rev().map(|(n, _)| n).collect();
+
+                // println!("neighbors: ");
                 for neighbor_index in neighbors {
                     //propaga valores de memoria
                     let neighbor = self
@@ -713,6 +752,7 @@ impl CodeGraph {
                         .unwrap()
                         .first_mut()
                         .unwrap();
+                    // println!("{}", neighbor.address);
                     if let Some(existing_value) = neighbor.initial_memory_usage {
                         if existing_value != memory as usize {
                             // falhou o mapeamento
@@ -1156,6 +1196,7 @@ impl CodeGraph {
             .filter_map(|i| i.allocation.as_ref())
     }
 
+    #[allow(dead_code)]
     pub fn print_vars(&self) {
         if self.memoria_consistente {
             for aloc in self.allocations() {
@@ -1275,6 +1316,7 @@ impl CodeGraph {
         processed_dot
     }
 
+    #[allow(dead_code)]
     pub fn export_to_file(&self, filename: &PathBuf) -> io::Result<()> {
         if let Some(parent) = filename.parent() {
             fs::create_dir_all(parent)?;

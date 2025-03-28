@@ -69,11 +69,9 @@ pub fn evaluate() {
                     );
                     continue;
                 }
-                match Otimizador::from_file(&output_path) {
-                    Ok(otm) => {
-                        otm.otimizar()
-                            .save()
-                            .expect("Falha ao salvar arquivo otimizado");
+                match Otimizador::from(&output_path).otimizar() {
+                    Ok(otimizado) => {
+                        otimizado.save().expect("Falha ao salvar arquivo otimizado");
                         let optimized_exec_info =
                             ExecutionInfo::new(&output_path, input.clone()).unwrap();
                         if optimized_exec_info.output != *expected_output {

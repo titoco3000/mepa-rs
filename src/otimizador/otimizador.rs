@@ -21,21 +21,13 @@ impl<P> Otimizador<P>
 where
     P: AsRef<Path>,
 {
-    pub fn new(code: MepaCode, file_path: Option<P>) -> Result<Self, Box<dyn Error>> {
+    pub fn new(code: MepaCode, file_path: Option<P>) -> Self {
         let code = CodeGraph::new(code);
-        if !code.memoria_consistente {
-            return Err("Memoria inconsistente; não é possivel otimizar".into());
-        }
-        Ok(Otimizador {
+        Otimizador {
             code,
             verbose_level: 0,
             file_path,
-        })
-    }
-
-    pub fn from_file(file_path: P) -> Result<Self, Box<dyn Error>> {
-        let raw_code = MepaCode::from_file(&file_path)?;
-        Otimizador::new(raw_code, Some(file_path))
+        }
     }
 
     pub fn verbose(mut self) -> Self {
@@ -47,7 +39,10 @@ where
         self.code.open_browser_visualization()
     }
 
-    pub fn otimizar(mut self) -> Self {
+    pub fn otimizar(mut self) -> Result<Self, Box<dyn Error>> {
+        if !self.code.memoria_consistente {
+            return Err("Memoria inconsistente; não é possivel otimizar".into());
+        }
         let functions = [
             fluxo,
             elimidar_codigo_morto,
@@ -68,7 +63,7 @@ where
                 break;
             }
         }
-        return self;
+        Ok(self)
         // code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
         //     .unwrap();
         // code.open_browser_visualization()
@@ -91,6 +86,17 @@ where
     pub fn save_at(mut self, file_path: P) -> io::Result<()> {
         self.file_path = Some(file_path);
         self.save()
+    }
+}
+
+impl<P> From<P> for Otimizador<P>
+where
+    P: AsRef<Path>,
+{
+    fn from(filename: P) -> Self {
+        let raw_code =
+            MepaCode::from_file(&filename).expect("Falha ao abrir arquivo para otimizar");
+        Otimizador::new(raw_code, Some(filename))
     }
 }
 
