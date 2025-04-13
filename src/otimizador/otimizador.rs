@@ -15,6 +15,7 @@ where
     code: CodeGraph,
     verbose_level: usize,
     file_path: Option<P>,
+    pub etapas_otimizacao: usize,
 }
 
 impl<P> Otimizador<P>
@@ -27,6 +28,7 @@ where
             code,
             verbose_level: 0,
             file_path,
+            etapas_otimizacao: 0,
         }
     }
 
@@ -37,6 +39,30 @@ where
 
     pub fn open_browser_visualization(&self) -> Result<(), std::io::Error> {
         self.code.open_browser_visualization()
+    }
+
+    pub fn otimizar_com_ordem(mut self, ordem: &[usize]) -> Result<Self, Box<dyn Error>> {
+        if !self.code.memoria_consistente {
+            return Err("Memoria inconsistente; não é possivel otimizar".into());
+        }
+        let functions = [
+            fluxo,
+            elimidar_codigo_morto,
+            propagar_constantes,
+            eliminar_variaveis_mortas,
+        ];
+
+        loop {
+            self.etapas_otimizacao += 1;
+            if !ordem
+                .iter()
+                .map(|idx| functions[*idx](&mut self.code))
+                .any(|r| r)
+            {
+                break;
+            }
+        }
+        Ok(self)
     }
 
     pub fn otimizar(mut self) -> Result<Self, Box<dyn Error>> {
@@ -51,6 +77,7 @@ where
         ];
 
         loop {
+            self.etapas_otimizacao += 1;
             let mut mudou = false;
 
             for &func in &functions {
@@ -64,12 +91,6 @@ where
             }
         }
         Ok(self)
-        // code.export_to_file(&PathBuf::from("output/debug/depois.dot"))
-        //     .unwrap();
-        // code.open_browser_visualization()
-        //     .expect("Falha ao abrir visualizacao");
-
-        // code.to_mepa_code()
     }
     pub fn save(self) -> io::Result<()> {
         if let Some(file_path) = self.file_path {
@@ -109,6 +130,7 @@ where
             code: CodeGraph::new(code),
             verbose_level: 0,
             file_path: None,
+            etapas_otimizacao: 0,
         }
     }
 }

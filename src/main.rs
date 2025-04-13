@@ -1,29 +1,18 @@
 use mepa_rs::{
     compiler::{compile, CompileError},
-    evaluator::evaluate,
+    evaluator::print_eval,
     machine,
-    otimizador::Otimizador,
+    otimizador::{genetico::encontrar_ordem_otimizacao, Otimizador},
 };
 
 use clap::{Arg, Command};
 use std::{fs, path::PathBuf};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 fn main() {
     if DEBUG {
-        let output_path = PathBuf::from("output/test.mepa");
-        compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, false)
-            .unwrap()
-            .unwrap();
-        let mut otm = Otimizador::from(&output_path);
-        otm.open_browser_visualization()
-            .expect("Falha ao abrir no navegador");
-        otm = otm.otimizar().expect("falha ao otimizar");
-        otm.open_browser_visualization()
-            .expect("Falha ao abrir no navegador");
-        otm.save().expect("Falha ao salvar otimizado");
-        machine::interactive_execution(&output_path, vec![]);
+        encontrar_ordem_otimizacao();
     } else {
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")
@@ -146,7 +135,7 @@ fn main() {
             eprintln!("Error: The 'input' argument is required for '{}'.", action);
             std::process::exit(1);
         } else {
-            evaluate();
+            print_eval();
         }
     }
 }
