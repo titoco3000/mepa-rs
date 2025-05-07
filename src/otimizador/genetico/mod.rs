@@ -5,11 +5,11 @@ use std::fmt::format;
 use crate::evaluator::evaluate_samples_with_specified_order;
 use algoritmo::Genetico;
 use plotters::prelude::*;
-use rand::random_range;
+use rand::{random_range, rngs::ThreadRng, Rng};
 
-const PESO_RESULTADOS: f32 = 100.0;
-const PESO_PASSOS: f32 = 2.0;
-const PESO_TAMANHO: f32 = 1.0;
+const PESO_RESULTADOS: f32 = 10.0;
+const PESO_PASSOS: f32 = 1.0;
+const PESO_TAMANHO: f32 = 0.0;
 
 fn obter_pontuacao(individuo: &[usize]) -> f32 {
     let eval = evaluate_samples_with_specified_order(&individuo);
@@ -41,23 +41,11 @@ fn obter_pontuacao(individuo: &[usize]) -> f32 {
         + (individuo.len() as f32) * PESO_TAMANHO
 }
 
-fn func_gene_aleatorio() -> usize {
-    random_range(0..4)
+fn func_gene_aleatorio(rng: &mut ThreadRng) -> usize {
+    rng.random_range(0..4)
 }
 
-pub fn encontrar_ordem_otimizacao() {
-    // let individuo = [0, 1, 2, 3];
-    // let p = obter_pontuacao(&individuo);
-    // println!("{}", p);
-
-    // println!("{:?}", Genetico::reproduzir(&[1, 1, 1], &[2, 2]));
-
-    let mut g = Genetico::new(func_gene_aleatorio, obter_pontuacao, 3)
-        .set_mut_rate(0.3)
-        .set_geracoes(100);
-    let (resultado, progresso) = g.otimizar();
-    println!("{:?}, {:?}", resultado, progresso);
-
+fn plot(resultado: Vec<usize>, progresso: &[f32]) {
     let root = BitMapBackend::new("plot.png", (640, 480)).into_drawing_area();
     root.fill(&WHITE).unwrap();
 
@@ -92,4 +80,19 @@ pub fn encontrar_ordem_otimizacao() {
             &RED,
         ))
         .unwrap();
+}
+
+pub fn encontrar_ordem_otimizacao() {
+    // let individuo = [0, 1, 2, 3];
+    // let p = obter_pontuacao(&individuo);
+    // println!("{}", p);
+
+    let mut g = Genetico::new(func_gene_aleatorio, obter_pontuacao, 3)
+        .set_mut_rate(0.1)
+        .set_pop(100)
+        .set_geracoes(30);
+    let (resultado, progresso) = g.otimizar();
+    println!("{:?}, {:?}", resultado, progresso);
+
+    plot(resultado, &progresso);
 }
