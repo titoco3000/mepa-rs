@@ -505,6 +505,7 @@ impl Compiler {
                 Token::SemiColon,
                 self.tokens.current_line()
             );
+            self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::Identifier(_)) {
             if is_token!(self.tokens.next_to_next(), Token::OpenParenthesis) {
                 self.function_call()?;
@@ -833,12 +834,12 @@ impl Compiler {
             self.tokens.consume()?;
         } else if is_token!(self.tokens.next(), Token::Minus) {
             self.tokens.consume()?;
-            self.generated_code.insert((None, Instruction::INVR));
             self.operand()?;
+            self.generated_code.insert((None, Instruction::INVR));
         } else if is_token!(self.tokens.next(), Token::Not) {
             self.tokens.consume()?;
-            self.generated_code.insert((None, Instruction::NEGA));
             self.operand()?;
+            self.generated_code.insert((None, Instruction::NEGA));
         } else if is_token!(self.tokens.next(), Token::AddressOf) {
             self.tokens.consume()?;
             ensure_is_token!(
