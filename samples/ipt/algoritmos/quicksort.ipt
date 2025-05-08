@@ -1,0 +1,71 @@
+fn swap(ptr a, ptr b){
+    int t;
+    t = *a;
+    *a = *b;
+    *b = t;
+}
+
+// Partition function
+fn partition(ptr arr, int low, int high) {
+    int pivot, i, j;
+    
+    // Choose the pivot
+    pivot = arr[high];
+    
+    // Index of smaller element and indicates 
+    // the right position of pivot found so far
+    i = low - 1;
+
+    // Traverse arr[low..high] and move all smaller
+    // elements to the left side. Elements from low to 
+    // i are smaller after every iteration
+    j = low;
+    while(j<=high){
+        if (arr[j] < pivot) {
+            i=i+1;
+            swap(&arr[i], &arr[j]);
+        }
+        j = j+1;
+    }
+    
+    // Move pivot after smaller elements and
+    // return its position
+    swap(&arr[i + 1], &arr[high]);  
+    return i + 1;
+}
+
+// The QuickSort function implementation
+fn quickSort(ptr arr, int low, int high) {
+    int pi;
+    if (low < high) {
+        
+        // pi is the partition return index of pivot
+        pi = partition(arr, low, high);
+
+        // Recursion calls for smaller elements
+        // and greater or equals elements
+        quickSort(arr, low, pi - 1);
+        quickSort(arr, pi + 1, high);
+    }
+}
+
+
+fn main(){
+    int arr[6], n, i;
+
+    n = 6;
+    
+    arr[0] = 10;
+    arr[1] = 7;
+    arr[2] = 8;
+    arr[3] = 9;
+    arr[4] = 1;
+    arr[5] = 5;
+
+    quickSort(arr, 0, n - 1);
+    i=0;
+    while(i<n){
+        print(arr[i]);
+        i=i+1;
+    }
+}

@@ -1,0 +1,15 @@
+fn mod(int n, int k){
+    return n - (n/k*k);
+}
+
+
+fn main(){
+    int decimal, resto;
+
+    read(decimal);
+
+    while(decimal>0){
+        print(mod(decimal,2));
+        decimal = decimal/2;
+    }
+}

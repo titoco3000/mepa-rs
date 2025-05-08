@@ -1,0 +1,24 @@
+// adaptado de: https://www.geeksforgeeks.org/program-for-nth-fibonacci-number/
+// funciona no máx até 30, depois disso o uso de memória é grande demais
+
+
+// Function to calculate the nth Fibonacci number using recursion
+fn nthFibonacci(int n){
+    int x;
+    // Base case: if n is 0 or 1, return n
+    if (n <= 1){
+        x = n;
+    }
+    else{
+        // Recursive case: sum of the two preceding Fibonacci numbers
+        x = nthFibonacci(n - 1) + nthFibonacci(n - 2);
+    }
+    return x;
+}
+
+fn main(){
+    int n;
+
+    read(n);
+    print(nthFibonacci(n));
+}

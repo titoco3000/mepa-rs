@@ -1,0 +1,71 @@
+fn preencher(ptr arr, int n, int val) {
+    while(n > 0) {
+        n = n - 1;
+        arr[n] = val;
+    }
+}
+
+fn adicionar_vertice(ptr grafo, int vertices, int origem, int destino, int valor) {
+    grafo[origem * vertices + destino] = valor;
+}
+
+fn obter_valor(ptr grafo, int vertices, int origem, int destino) {
+    return grafo[origem * vertices + destino];
+}
+
+fn floyd_warshall(ptr grafo, ptr dist, int vertices) {
+    int i, j, k;
+    
+    // Inicia matriz de distancias
+    i = 0;
+    while (i < vertices) {
+        j = 0;
+        while (j < vertices) {
+            if (i == j) {
+                dist[i * vertices + j] = 0;
+            } else {
+                dist[i * vertices + j] = grafo[i * vertices + j];
+                if (dist[i * vertices + j] == 0) {
+                    dist[i * vertices + j] = 9999; // Numero grande representando "infinito"
+                }
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    
+    k = 0;
+    while (k < vertices) {
+        i = 0;
+        while (i < vertices) {
+            j = 0;
+            while (j < vertices) {
+                if (dist[i * vertices + k] + dist[k * vertices + j] < dist[i * vertices + j]) {
+                    dist[i * vertices + j] = dist[i * vertices + k] + dist[k * vertices + j];
+                }
+                j = j + 1;
+            }
+            i = i + 1;
+        }
+        k = k + 1;
+    }
+}
+
+fn main() {
+    int vertices;
+    int grafo[25], distancias[25];
+    int i, j;
+    
+    vertices = 5;
+
+    // grafo inicialmente vazio
+    preencher(grafo, vertices * vertices, 0);
+    
+    adicionar_vertice(grafo, vertices, 0, 1, 4);
+    adicionar_vertice(grafo, vertices, 0, 2, 8);
+    adicionar_vertice(grafo, vertices, 1, 4, 6);
+    adicionar_vertice(grafo, vertices, 2, 3, 2);
+    adicionar_vertice(grafo, vertices, 3, 4, 10);
+    
+    floyd_warshall(grafo, distancias, vertices);
+}

@@ -1,0 +1,99 @@
+// Código adaptado de: https://www.geeksforgeeks.org/merge-sort/
+
+fn print_arr(ptr arr, int n){
+    int i;
+    i = 0;
+    while(i<n){
+        print(arr[i]);
+        i = i+1;
+    }
+}
+
+// Junta dois subarrays de arr.
+// o primeiro é arr[l..m]
+// O segund é arr[m+1..r]
+fn merge(ptr arr, ptr buffer, int l, int m, int r)
+{
+    int i, j, k, n1, n2;
+    ptr L,R;
+    
+    n1 = m - l + 1;
+    n2 = r - m;
+
+    // Equivale a arrays temporarios
+    L = buffer;
+    R = buffer + m+1;
+
+    // Copia dados para buffer L[] e R[]
+    i=0;
+    while(i < n1){
+        L[i] = arr[l + i];
+        i = i+1;
+    }
+    j=0;
+    while(j < n2){
+        R[j] = arr[m + 1 + j];
+        j = j+1;
+    }
+
+    // Merge os temp arrays de volta para arr[l..r]
+    i = 0;
+    j = 0;
+    k = l;
+    while (i < n1 && j < n2) {
+        if (L[i] <= R[j]) {
+            arr[k] = L[i];
+            i=i+1;
+        }
+        else {
+            arr[k] = R[j];
+            j=j+1;
+        }
+        k=k+1;
+    }
+
+    // Copia elementos restantes de L[],
+    // se tiver algum
+    while (i < n1) {
+        arr[k] = L[i];
+        i=i+1;
+        k=k+1;
+    }
+
+    // Copia elementos restantes de R[],
+    // se tiver algum
+    while (j < n2) {
+        arr[k] = R[j];
+        j=j+1;
+        k=k+1;
+    }
+}
+
+// l é para o índice esquerdo e r, direito do 
+// sub-array de arr a ser ordenado
+fn mergeSort(ptr arr, ptr buffer, int l, int r){
+    int m;
+    if (l < r) {
+        m = l + (r - l) / 2;
+
+        // Ordena as duas metades
+        mergeSort(arr, buffer, l, m);
+        mergeSort(arr, buffer, m + 1, r);
+
+        merge(arr, buffer, l, m, r);
+    }
+}
+
+fn main(){
+    int arr[5], buffer[5];
+    
+    arr[0] = 38;
+    arr[1] = 27;
+    arr[2] = 43;
+    arr[3] = 10;
+    arr[4] = 3;
+
+    print_arr(arr, 5);
+    mergeSort(arr, buffer, 0, 5-1);
+    print_arr(arr, 5);
+}

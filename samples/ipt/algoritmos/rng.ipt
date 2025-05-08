@@ -1,0 +1,31 @@
+int last_step;
+
+// retorna o resto da divisão de n por k
+fn mod(int n, int k){
+    return n - (n/k*k);
+}
+
+fn random_number(){
+    last_step = mod(last_step*last_step, 5826 ) + 17;
+    return last_step;
+
+}
+
+
+fn set_seed(int s){
+    last_step = s;
+    random_number();
+}
+
+fn main(){
+    int n, i;
+
+    set_seed(0);
+    n = 10;
+    i = 0;
+
+    while(i<n){
+        print(random_number());
+        i = i+1;
+    } 
+}
