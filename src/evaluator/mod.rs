@@ -42,15 +42,15 @@ pub fn evaluate() {
     }
 
     let work_material = [
-        ("elementares/acesso-aleatorio", vec![1], vec![20]),
-        ("elementares/cod-morto", vec![], vec![]),
-        ("elementares/copia", vec![], vec![12]),
-        ("elementares/deadvar", vec![13], vec![13]),
-        ("elementares/global-var", vec![], vec![7]),
-        ("elementares/indirecao", vec![], vec![]),
-        ("elementares/inner", vec![], vec![20]),
-        ("elementares/lifetime", vec![], vec![]),
-        ("elementares/movimentacao", vec![], vec![0, 1, 2, 3, 4]),
+        // ("elementares/acesso-aleatorio", vec![1], vec![20]),
+        // ("elementares/cod-morto", vec![], vec![]),
+        // ("elementares/copia", vec![], vec![12]),
+        // ("elementares/deadvar", vec![13], vec![13]),
+        // ("elementares/global-var", vec![], vec![7]),
+        // ("elementares/indirecao", vec![], vec![]),
+        // ("elementares/inner", vec![], vec![20]),
+        // ("elementares/lifetime", vec![], vec![]),
+        // ("elementares/movimentacao", vec![], vec![0, 1, 2, 3, 4]),
         ("algoritmos/binary_search", vec![], vec![4]),
         (
             "algoritmos/bubble_sort",
@@ -94,6 +94,10 @@ pub fn evaluate() {
         ),
     ];
 
+    let mut sum_reduc_steps = 0.0;
+    let mut sum_reduc_instructs = 0.0;
+    let mut sum_reduc_memory = 0.0;
+
     for (filename, input, expected_output) in work_material.iter() {
         let input_path = samples_dir.join(format!("{}.ipt", filename));
         let output_path = PathBuf::from("output").join(format!("{}.mepa", filename));
@@ -133,6 +137,13 @@ pub fn evaluate() {
                             exec_info.instructions,
                             optimized_exec_info.instructions
                         );
+                        sum_reduc_steps +=
+                            1.0 - (optimized_exec_info.steps as f32 / exec_info.steps as f32);
+                        sum_reduc_instructs += 1.0
+                            - (optimized_exec_info.instructions as f32
+                                / exec_info.instructions as f32);
+                        sum_reduc_memory += 1.0
+                            - (optimized_exec_info.max_memory as f32 / exec_info.max_memory as f32);
                     }
                     Err(e) => {
                         println!("{} falhou: {:?}", filename, e)
@@ -142,4 +153,10 @@ pub fn evaluate() {
             Err(e) => println!("Failed to compile {}: {:?}", filename, e),
         }
     }
+    println!(
+        "Reduções médias: {}% steps, {}% max memory, {}% instructions",
+        (sum_reduc_steps / work_material.len() as f32 * 100.0).round(),
+        (sum_reduc_memory / work_material.len() as f32 * 100.0).round(),
+        (sum_reduc_instructs / work_material.len() as f32 * 100.0).round(),
+    );
 }
