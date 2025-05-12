@@ -55,7 +55,7 @@ pub fn evaluate() {
         (
             "algoritmos/bubble_sort",
             vec![],
-            vec![2, 1, 3, 2, 1, 3, 1, 2, 3],
+            vec![2, 1, 3, 7, 1, 2, 1, 3, 7, 1, 1, 1, 2, 3, 7],
         ),
         (
             "algoritmos/decimal_to_binary",
