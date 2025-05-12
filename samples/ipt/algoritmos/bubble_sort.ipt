@@ -29,11 +29,13 @@ fn bubble_sort(ptr arr, int n){
 }
 
 fn main(){
-    int arr[3], x;
+    int arr[5], x;
     
     arr[0] = 2;
     arr[1] = 1;
     arr[2] = 3;
+    arr[3] = 7;
+    arr[4] = 1;
 
     // equivalente a:
     // ptr ref;
@@ -42,9 +44,9 @@ fn main(){
     // ref[1] = 1;
     // ref[2] = 3;
 
-    print_arr(arr, 3);
-    bubble_sort(arr, 3);
-    print_arr(arr, 3);
+    print_arr(arr, 5);
+    bubble_sort(arr, 5);
+    print_arr(arr, 5);
 
     return 1;
 }
