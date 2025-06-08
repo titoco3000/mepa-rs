@@ -1,9 +1,9 @@
+fn inutil(int z){
+    print(z);
+}
+
 fn main(){
-    int y;
     int x;
     x = 2;
-    y = x;
-    print(y);
-    x = 2+3;
-    return 0;
+    print(x);
 }

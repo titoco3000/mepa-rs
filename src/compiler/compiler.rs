@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::mepa::label::Label;
-use crate::otimizador;
+use crate::otimizador::{self, Otimizador};
 use crate::{ensure_is_token, is_token, mepa::instruction::Instruction};
 
 use super::error::CompileError;
@@ -966,11 +966,16 @@ pub fn compile(
     let mut c = Compiler::new(origin)?;
     c.program()?;
     // println!("Compilado com sucesso!");
-    if otimizar {
-        let otimizado = otimizador::Otimizador::from(c.generated_code);
-        println!("Otimizado com sucesso!");
-        Ok(otimizado.save_at(target))
-    } else {
-        Ok(c.generated_code.to_file(target))
-    }
+    Ok({
+        let e = c.generated_code.to_file(target);
+        if otimizar {
+            println!("Otimizando...");
+            Otimizador::from(target)
+                .otimizar()
+                .unwrap()
+                .save()
+                .expect("Falha ao salvar otimizado");
+        }
+        e
+    })
 }
