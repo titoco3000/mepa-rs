@@ -2,7 +2,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::mepa::label::Label;
-use crate::otimizador::{self, Otimizador};
+use crate::otimizador::Otimizador;
 use crate::{ensure_is_token, is_token, mepa::instruction::Instruction};
 
 use super::error::CompileError;
