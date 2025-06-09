@@ -1,6 +1,6 @@
 use super::error::CompileError;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Cursor, Read};
 use std::path::PathBuf;
 use std::usize;
 
@@ -73,43 +73,83 @@ macro_rules! ensure_is_token {
 }
 
 pub struct Reader {
-    reader: BufReader<File>,
+    reader: BufReader<Box<dyn Read>>, // Use a trait object to handle both File and Cursor
     next_char: Option<char>,
     current_line: usize,
 }
 
 impl Reader {
     pub fn new(file_path: &PathBuf) -> Result<Reader, CompileError> {
-        let file = File::open(file_path).expect("unable to open file");
-        let mut reader = BufReader::new(file);
-        let mut single_char = [0; 1]; // Buffer for reading one byte at a time
+        let file = File::open(file_path).map_err(|e| {
+            CompileError::Lexic(format!(
+                "unable to open file {}: {}",
+                file_path.display(),
+                e
+            ))
+        })?;
+        let mut reader = BufReader::new(Box::new(file) as Box<dyn Read>);
+        let mut single_char = [0; 1];
+
+        let next_char = if reader
+            .read(&mut single_char)
+            .map_err(|e| CompileError::Lexic(format!("{}", e)))?
+            == 0
+        {
+            // Handle empty file
+            None
+        } else {
+            // Successfully read the first character
+            char::from_u32(single_char[0] as u32)
+        };
+
         Ok(Reader {
-            next_char: {
-                if reader
-                    .read(&mut single_char)
-                    .map_err(|e| CompileError::Lexic(format!("{}", e)))?
-                    == 0
-                {
-                    panic!("Error on first character");
-                }
-                char::from_u32(single_char[0] as u32)
-            },
             reader,
+            next_char,
             current_line: 1,
         })
     }
 
+    pub fn from_str(input: &str) -> Result<Reader, CompileError> {
+        // 1. Convert the string slice to an owned byte vector.
+        //    This copies the data, resolving the lifetime issue.
+        let owned_bytes = input.as_bytes().to_vec();
+
+        // 2. Create a Cursor that owns its data (`Cursor<Vec<u8>>`).
+        //    Because it owns its data, it has a 'static lifetime.
+        let cursor = Cursor::new(owned_bytes);
+
+        // 3. Box the cursor and create the BufReader. This cast is now valid.
+        let mut reader = BufReader::new(Box::new(cursor) as Box<dyn Read>);
+        let mut single_char = [0; 1];
+
+        // 4. Read the first character to initialize `next_char`, same as in new().
+        let next_char = if reader
+            .read(&mut single_char)
+            .map_err(|e| CompileError::Lexic(format!("{}", e)))?
+            == 0
+        {
+            None // Handle empty string
+        } else {
+            char::from_u32(single_char[0] as u32)
+        };
+
+        Ok(Reader {
+            reader,
+            next_char,
+            current_line: 1,
+        })
+    }
+
+    // consume_char and get_next_token need to be adapted to use Box<dyn Read>
+    // The existing logic should work, but the struct definition must be updated first.
+
     fn consume_char(&mut self) {
-        if self.next_char.is_some() && self.next_char.unwrap() == '\n' {
+        if self.next_char == Some('\n') {
             self.current_line += 1;
         }
-        let mut single_char = [0; 1]; // Buffer for reading one byte at a time
+        let mut single_char = [0; 1]; // Buffer for reading one byte
         self.next_char = if self.reader.read(&mut single_char).expect("Error on read") > 0 {
-            if let Some(c) = char::from_u32(single_char[0] as u32) {
-                Some(c)
-            } else {
-                None
-            }
+            char::from_u32(single_char[0] as u32)
         } else {
             None
         };
@@ -285,6 +325,25 @@ impl Lexic {
         let mut list = Vec::with_capacity(128);
 
         let mut l = Reader::new(file_path)?;
+
+        let mut current_line = 1;
+        while let (Some(token), line) = l.get_next_token(current_line)? {
+            current_line = line;
+            list.push((token, line));
+        }
+
+        list = list.into_iter().rev().collect();
+        let line = list
+            .last()
+            .ok_or_else(|| CompileError::Lexic("Arquivo sem tokens".to_owned()))?
+            .1;
+        Ok(Lexic(list, line))
+    }
+
+    pub fn from_str(input: &str) -> Result<Lexic, CompileError> {
+        let mut list = Vec::with_capacity(128);
+
+        let mut l = Reader::from_str(input)?;
 
         let mut current_line = 1;
         while let (Some(token), line) = l.get_next_token(current_line)? {

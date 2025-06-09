@@ -86,6 +86,7 @@ pub struct FuncMetadata {
     pub usos: HashSet<usize>,
 }
 
+#[derive(Clone)]
 pub struct CodeGraph {
     pub grafo: Graph<Vec<InstructionAndMetadata>, ()>,
     pub funcoes: Vec<FuncMetadata>,
@@ -1329,6 +1330,7 @@ impl CodeGraph {
         write!(&file, "{}", self.get_dot())
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn open_browser_visualization(&self) -> Result<(), std::io::Error> {
         let url = "https://dreampuf.github.io/GraphvizOnline/?engine=dot#".to_owned()
             + &encode(&self.get_dot());

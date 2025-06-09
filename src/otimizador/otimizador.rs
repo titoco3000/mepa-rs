@@ -35,6 +35,7 @@ where
         self
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn open_browser_visualization(&self) -> Result<(), std::io::Error> {
         self.code.open_browser_visualization()
     }
@@ -86,6 +87,10 @@ where
     pub fn save_at(mut self, file_path: P) -> io::Result<()> {
         self.file_path = Some(file_path);
         self.save()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.code.clone().to_mepa_code().to_string().unwrap()
     }
 }
 

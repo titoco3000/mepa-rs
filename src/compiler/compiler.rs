@@ -26,6 +26,15 @@ impl Compiler {
         })
     }
 
+    pub fn from_str(input: &str) -> Result<Compiler, CompileError> {
+        Ok(Compiler {
+            tokens: Lexic::from_str(input)?,
+            simbols: SimbolTable::new(),
+            generated_code: MepaCode::with_capacity(256),
+            current_function: None,
+        })
+    }
+
     fn program(&mut self) -> Result<(), CompileError> {
         self.generated_code.insert((None, Instruction::INPP));
         let global_vars = self.declarations()?;
@@ -978,4 +987,11 @@ pub fn compile(
         }
         e
     })
+}
+
+pub fn compile_from_str(input: &str) -> Result<MepaCode, CompileError> {
+    let mut c = Compiler::from_str(input)?;
+    c.program()?;
+    // println!("Compilado com sucesso!");
+    Ok(c.generated_code)
 }

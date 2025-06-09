@@ -1,5 +1,5 @@
 use super::{instruction::Instruction, label::Label};
-use crate::utils::write_matrix;
+use crate::utils::{matrix_to_string, write_matrix};
 use std::fs::{self, File};
 use std::io::{self, BufRead};
 use std::ops::{Deref, DerefMut};
@@ -129,5 +129,31 @@ impl MepaCode {
             .collect();
 
         write_matrix(&matrix, file)
+    }
+
+    pub fn to_string(&self) -> io::Result<String> {
+        // First, transform the internal vector of instructions into a
+        // matrix of strings, similar to the `to_file` method.
+        let matrix: Vec<Vec<String>> = self
+            .clone()
+            .0
+            .into_iter()
+            .map(|line| {
+                let mut v = Vec::with_capacity(5);
+                // Add the label to the row, or a placeholder if it's absent.
+                v.push(if let Some(label) = line.0 {
+                    format!("{}:", label) // Using a colon for standard assembly style
+                } else {
+                    String::new() // Using an empty string for better alignment
+                });
+                // Add the string parts of the instruction itself.
+                v.append(&mut line.1.to_string_vec());
+                v
+            })
+            .collect();
+
+        // Use the helper function to format the matrix into a single string.
+        // The result is wrapped in `Ok` to match the function's return type.
+        Ok(matrix_to_string(&matrix))
     }
 }
