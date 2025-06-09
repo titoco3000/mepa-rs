@@ -6,12 +6,28 @@ use mepa_rs::{
 };
 
 use clap::{Arg, Command};
-use std::{fs, path::PathBuf};
+use std::{env, fs, path::PathBuf};
 
 const DEBUG: bool = false;
 
 fn main() {
-    if DEBUG {
+    let args: Vec<String> = env::args().collect();
+
+    // Check if the program was launched by clicking a .mepa file
+    if args.len() == 2 && args[1].ends_with(".mepa") {
+        let input_path = PathBuf::from(&args[1]);
+        if input_path.exists() {
+            println!(
+                "Opening {:?} in debug mode...",
+                input_path.file_name().unwrap()
+            );
+            // Directly call the interactive execution for the given file
+            machine::interactive_execution(&input_path, vec![]);
+        } else {
+            eprintln!("Error: File not found '{}'", args[1]);
+            std::process::exit(1);
+        }
+    } else if DEBUG {
         let output_path = PathBuf::from("output/test.mepa");
         compile(&PathBuf::from("samples/ipt/test.ipt"), &output_path, false)
             .unwrap()
@@ -25,6 +41,7 @@ fn main() {
         otm.save().expect("Falha ao salvar otimizado");
         machine::interactive_execution(&output_path, vec![]);
     } else {
+        // The existing CLI logic
         let matches = Command::new("MepaC")
             .about("A compiler and MEPA execution tool")
             .arg(

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Mepa Debugger
+Comment=Run and debug MEPA files
+Exec=/usr/local/bin/mepa-rs %f
+Icon=utilities-terminal
+Terminal=true
+Type=Application
+MimeType=application/x-mepa
+Categories=Development;IDE;

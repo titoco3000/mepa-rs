@@ -103,6 +103,26 @@ A máquina virtual roda código MEPA, com o conjunto de instruções descritas a
 
 Como este programa pode fazer três coisas diferentes (compilar, executar e, futuramente, otimizar) é preciso passar como argumentos a ação que se quer. Abaixo está demonstrado como rodar dentro do ambiente cargo, se fosse o programa compilado, trocaria a parte `cargo run --` por `./nome-do-executavel`.
 
+## Instalação do programa final
+
+### Linux
+
+```bash
+cargo build --release
+sudo cp target/release/mepa-rs /usr/local/bin/mepa-rs
+sudo cp extras/mepa-rs-mimetype.xml /usr/share/mime/packages/mepa-rs-mimetype.xml
+sudo update-mime-database /usr/share/mime
+sudo cp extras/mepa-rs.desktop /usr/share/applications/mepa-rs.desktop
+sudo update-desktop-database
+
+```
+
+## Compilação WASM
+
+```bash
+wasm-pack build --target web
+```
+
 #### Compilação
 
 ```
@@ -160,10 +180,3 @@ $ cargo run -- compile samples/ipt
 ```
 
 Nesse modo, todas as opções passadas (-o, --debug, etc) são aplicadas sequencialmente em cada arquivo.
-
-# Apresentação TCC
-
-```bash
-cargo run -- compile samples/ipt/teste.ipt -o output/teste.mepa
-cargo run -- compile samples/ipt/teste.ipt -o output/teste-otimizado.mepa --optimize
-```

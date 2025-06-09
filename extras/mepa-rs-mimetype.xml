@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+    <mime-type type="application/x-mepa">
+        <comment>MEPA Program</comment>
+        <glob pattern="*.mepa" />
+    </mime-type>
+</mime-info>
