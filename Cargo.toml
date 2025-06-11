@@ -8,6 +8,27 @@ repository = "https://github.com/titoco3000/mepa-rs"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[profile.release]
+opt-level = 3
+lto = true
+
+[profile.wasm-release]
+inherits = "release"
+# Optimize for size ('s') or even more aggressively ('z'). 'z' may be slower to compile
+# and might not always result in a smaller binary than 's'.
+opt-level = 'z'
+# Setting codegen-units to 1 can result in better optimizations at the cost of
+# longer compile times as it prevents parallel code generation.
+codegen-units = 1
+# Strip debug information from the final binary.
+strip = "debuginfo"
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]
+
+# [package.metadata.wasm-pack.profile.release]
+# wasm-opt = ["-Os", "--strip-debug"]
+
 [dependencies]
 petgraph = "0.6.5"
 urlencoding = "2.1.3"

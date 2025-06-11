@@ -120,7 +120,7 @@ sudo update-desktop-database
 ## Compilação WASM
 
 ```bash
-wasm-pack build --target web
+wasm-pack build --target web --release
 ```
 
 #### Compilação
