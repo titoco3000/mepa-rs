@@ -1,7 +1,31 @@
-int GLOBAL;
+int seed;
+
+// retorna o resto da divisão de n por k
+fn mod(int n, int k){
+    return n - (n/k*k);
+}
+
+fn rand()
+{
+    int m, x;
+    m = 255;
+    seed = 1103515245 * seed +  12345;
+    if(seed<0){
+        seed = -seed;
+    }
+    seed = mod(seed, 255);
+    return seed;
+}
+
+fn fill_rand(ptr arr, int n){
+    while(n>0){
+        n = n-1;
+        arr[n] = rand();
+    }
+}
+
 fn print_arr(ptr arr, int n){
     int i;
-    GLOBAL = 7;
     i = 0;
     while(i<n){
         print(arr[i]);
@@ -29,24 +53,14 @@ fn bubble_sort(ptr arr, int n){
 }
 
 fn main(){
-    int arr[5], x;
+    int arr[100];
     
-    arr[0] = 2;
-    arr[1] = 1;
-    arr[2] = 3;
-    arr[3] = 7;
-    arr[4] = 1;
+    seed = 0;
+    fill_rand(arr, 100);
 
-    // equivalente a:
-    // ptr ref;
-    // ref = &arr;
-    // ref[0] = 2;
-    // ref[1] = 1;
-    // ref[2] = 3;
-
-    print_arr(arr, 5);
-    bubble_sort(arr, 5);
-    print_arr(arr, 5);
+    print_arr(arr, 100);
+    bubble_sort(arr, 100);
+    print_arr(arr, 100);
 
     return 1;
 }

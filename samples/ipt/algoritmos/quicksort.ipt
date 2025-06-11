@@ -1,3 +1,29 @@
+int seed;
+
+// retorna o resto da divisão de n por k
+fn mod(int n, int k){
+    return n - (n/k*k);
+}
+
+fn rand()
+{
+    int m, x;
+    m = 255;
+    seed = 1103515245 * seed +  12345;
+    if(seed<0){
+        seed = -seed;
+    }
+    seed = mod(seed, 255);
+    return seed;
+}
+
+fn fill_rand(ptr arr, int n){
+    while(n>0){
+        n = n-1;
+        arr[n] = rand();
+    }
+}
+
 fn swap(ptr a, ptr b){
     int t;
     t = *a;
@@ -51,16 +77,11 @@ fn quickSort(ptr arr, int low, int high) {
 
 
 fn main(){
-    int arr[6], n, i;
+    int arr[100], n, i;
 
-    n = 6;
-    
-    arr[0] = 10;
-    arr[1] = 7;
-    arr[2] = 8;
-    arr[3] = 9;
-    arr[4] = 1;
-    arr[5] = 5;
+    seed = 0;
+    n = 100;
+    fill_rand(arr, n);
 
     quickSort(arr, 0, n - 1);
     i=0;

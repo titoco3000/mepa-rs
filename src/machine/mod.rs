@@ -177,25 +177,26 @@ impl<'a> MepaMachine<'a> {
                 }
                 Instruction::SOMA => {
                     self.m[self.s as usize - 1] =
-                        self.m[self.s as usize - 1] + self.m[self.s as usize];
+                        self.m[self.s as usize - 1].wrapping_add(self.m[self.s as usize]);
                     self.s -= 1;
                     self.i += 1;
                 }
                 Instruction::SUBT => {
                     self.m[self.s as usize - 1] =
-                        self.m[self.s as usize - 1] - self.m[self.s as usize];
+                        self.m[self.s as usize - 1].wrapping_sub(self.m[self.s as usize]);
                     self.s -= 1;
                     self.i += 1;
                 }
                 Instruction::MULT => {
                     self.m[self.s as usize - 1] =
-                        self.m[self.s as usize - 1] * self.m[self.s as usize];
+                        self.m[self.s as usize - 1].wrapping_mul(self.m[self.s as usize]);
+                    // solve that
                     self.s -= 1;
                     self.i += 1;
                 }
                 Instruction::DIVI => {
                     self.m[self.s as usize - 1] =
-                        self.m[self.s as usize - 1] / self.m[self.s as usize];
+                        self.m[self.s as usize - 1].div_euclid(self.m[self.s as usize]);
                     self.s -= 1;
                     self.i += 1;
                 }
