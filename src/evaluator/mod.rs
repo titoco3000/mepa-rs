@@ -1,5 +1,8 @@
 use crate::{
-    compiler::compile, machine::MepaMachine, mepa::code::MepaCode, otimizador::Otimizador,
+    compiler::compile,
+    machine::MepaMachine,
+    mepa::{code::MepaCode, error::MepaResult},
+    otimizador::Otimizador,
 };
 use std::path::PathBuf;
 
@@ -11,7 +14,7 @@ struct ExecutionInfo {
 }
 
 impl ExecutionInfo {
-    pub fn new(filename: &PathBuf, input: Vec<i32>) -> Result<Self, String> {
+    pub fn new(filename: &PathBuf, input: Vec<i32>) -> MepaResult<Self> {
         let mc: MepaCode = MepaCode::from_file(filename).unwrap();
         let mut info = ExecutionInfo {
             steps: 0,

@@ -82,6 +82,34 @@ impl MepaCode {
         Ok(mc)
     }
 
+    pub fn from_str(input: &str) -> io::Result<MepaCode> {
+        let delimiters = [',', ' ', '\t', ';', ':'];
+
+        let instruction_count = input.lines().count();
+        let mut mc = MepaCode(Vec::with_capacity(instruction_count));
+
+        for line in input.lines() {
+            let without_comments = &line[..line
+                .find('#')
+                .unwrap_or(line.len())
+                .min(line.find("//").unwrap_or(line.len()))];
+
+            let tokens: Vec<&str> = without_comments
+                .split(|c| delimiters.contains(&c))
+                .filter(|s| !s.is_empty())
+                .collect();
+
+            if !tokens.is_empty() {
+                match Instruction::parse(&tokens) {
+                    Ok(instr) => mc.insert(instr),
+                    Err(_) => panic!("Failed to interpret line {:?}", tokens),
+                }
+            }
+        }
+
+        Ok(mc)
+    }
+
     pub fn remove_instruction(&mut self, index: usize) {
         self.0.remove(index);
 
