@@ -1,6 +1,6 @@
 use crate::{
     compiler::compile,
-    machine::MepaMachine,
+    machine::FullMachine,
     mepa::{code::MepaCode, error::MepaResult},
     otimizador::Otimizador,
 };
@@ -22,7 +22,7 @@ impl ExecutionInfo {
             instructions: mc.len(),
             output: Vec::new(),
         };
-        let mut machine = MepaMachine::new(mc)
+        let mut machine = FullMachine::new(mc)
             .add_input_vec(input)
             .add_output(&mut info.output);
         while !machine.ended() {

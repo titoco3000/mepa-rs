@@ -43,16 +43,16 @@ impl InputSource {
     }
 }
 
-pub struct MepaMachine<'a> {
+pub struct FullMachine<'a> {
     basic_machine: BasicMachine,
     input: InputSource,
     output: Option<&'a mut Vec<i32>>,
 }
 
-impl<'a> MepaMachine<'a> {
-    pub fn new(code: MepaCode) -> MepaMachine<'a> {
+impl<'a> FullMachine<'a> {
+    pub fn new(code: MepaCode) -> FullMachine<'a> {
         let basic_machine = BasicMachine::new(code);
-        MepaMachine {
+        FullMachine {
             basic_machine,
             input: InputSource::Stdin,
             output: None,

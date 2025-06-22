@@ -2,11 +2,13 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MepaError {
-    IO(io::Error),
+    IO(String),
     Runtime(String),
-    MissingInput(usize), //linha
+    MissingInput(usize),
     Other(String),
 }
 
@@ -24,7 +26,7 @@ impl fmt::Display for MepaError {
 impl Error for MepaError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            MepaError::IO(e) => Some(e),
+            //MepaError::IO(e) => Some(e),
             _ => None,
         }
     }
@@ -32,7 +34,7 @@ impl Error for MepaError {
 
 impl From<io::Error> for MepaError {
     fn from(err: io::Error) -> Self {
-        MepaError::IO(err)
+        MepaError::IO(err.to_string())
     }
 }
 

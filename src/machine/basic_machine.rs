@@ -1,4 +1,5 @@
-use wasm_bindgen::prelude::wasm_bindgen;
+use serde::Serialize;
+use std::usize;
 
 use crate::{
     mepa::{
@@ -9,19 +10,20 @@ use crate::{
     utils::print_matrix,
 };
 
-#[wasm_bindgen]
+#[derive(Serialize)]
 pub struct BasicMachine {
+    #[serde(skip)]
     code: MepaCode,
-    m: Vec<i32>,
-    d: Vec<i32>,
-    i: usize,
-    s: i32,
+    pub m: Vec<i32>,
+    pub d: Vec<i32>,
+    pub i: usize,
+    pub s: i32,
 }
 
 impl BasicMachine {
     pub fn new(code: MepaCode) -> BasicMachine {
-        let mut m = Vec::with_capacity(1024);
-        let d = vec![-1; 256];
+        let mut m = Vec::new();
+        let d = vec![-1; 2];
         unsafe {
             m.set_len(m.capacity());
         }
@@ -98,39 +100,46 @@ impl BasicMachine {
         }
     }
 
+    pub fn aloc(&mut self, amount: usize) {
+        self.s += amount as i32;
+        if self.s + 1 > self.m.len() as i32 {
+            self.m.resize((self.s + 1) as usize, 0);
+        }
+    }
+
     pub fn step_with_input(&mut self, input: Option<i32>) -> MepaResult<Option<i32>> {
         let mut output = None;
 
         if let Some(code) = self.code.0.get(self.i) {
-            match &code.1 {
+            match code.1.clone() {
                 Instruction::CRCT(k) => {
-                    self.s += 1;
-                    self.m[self.s as usize] = *k;
+                    self.aloc(1);
+                    self.m[self.s as usize] = k;
                     self.i += 1;
                 }
                 Instruction::CRVL(m, n) => {
-                    self.s += 1;
-                    self.m[self.s as usize] = self.m[(self.d[*m as usize] + n) as usize];
+                    self.aloc(1);
+                    self.m[self.s as usize] = self.m[(self.d[m as usize] + n) as usize];
                     self.i += 1;
                 }
                 Instruction::CREN(m, n) => {
-                    self.s += 1;
-                    self.m[self.s as usize] = self.d[*m as usize] + n;
+                    self.aloc(1);
+                    self.m[self.s as usize] = self.d[m as usize] + n;
                     self.i += 1;
                 }
                 Instruction::ARMZ(m, n) => {
-                    self.m[(self.d[*m as usize] + n) as usize] = self.m[self.s as usize];
+                    self.m[(self.d[m as usize] + n) as usize] = self.m[self.s as usize];
                     self.s -= 1;
                     self.i += 1;
                 }
                 Instruction::CRVI(m, n) => {
-                    self.s += 1;
+                    self.aloc(1);
                     self.m[self.s as usize] =
-                        self.m[self.m[(self.d[*m as usize] + n) as usize] as usize];
+                        self.m[self.m[(self.d[m as usize] + n) as usize] as usize];
                     self.i += 1;
                 }
                 Instruction::ARMI(m, n) => {
-                    let temp = self.m[(self.d[*m as usize] + n) as usize] as usize;
+                    let temp = self.m[(self.d[m as usize] + n) as usize] as usize;
                     self.m[temp] = self.m[self.s as usize];
                     self.s -= 1;
                     self.i += 1;
@@ -260,7 +269,7 @@ impl BasicMachine {
                 Instruction::PARA => (),
                 Instruction::LEIT => match input {
                     Some(n) => {
-                        self.s += 1;
+                        self.aloc(1);
                         self.m[self.s as usize] = n;
                         self.i += 1;
                     }
@@ -272,7 +281,7 @@ impl BasicMachine {
                     self.i += 1;
                 }
                 Instruction::AMEM(n) => {
-                    self.s += n;
+                    self.aloc(n as usize);
                     self.i += 1;
                 }
                 Instruction::DMEM(n) => {
@@ -285,18 +294,18 @@ impl BasicMachine {
                     self.i = 1;
                 }
                 Instruction::CHPR(p) => {
-                    self.s += 1;
+                    self.aloc(1);
                     self.m[self.s as usize] = self.i as i32 + 1;
                     self.i = p.locate(&self.code).unwrap();
                 }
                 Instruction::ENPR(k) => {
-                    self.s += 1;
-                    self.m[self.s as usize] = self.d[*k as usize];
-                    self.d[*k as usize] = self.s + 1;
+                    self.aloc(1);
+                    self.m[self.s as usize] = self.d[k as usize];
+                    self.d[k as usize] = self.s + 1;
                     self.i += 1;
                 }
                 Instruction::RTPR(k, n) => {
-                    self.d[*k as usize] = self.m[self.s as usize];
+                    self.d[k as usize] = self.m[self.s as usize];
                     self.i = self.m[self.s as usize - 1] as usize;
                     self.s -= n + 2;
                 }

@@ -4,13 +4,15 @@ pub mod machine;
 pub mod mepa;
 pub mod otimizador;
 pub mod utils;
-
 use std::path::PathBuf;
 
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 use crate::otimizador::Otimizador;
+
+// #[cfg(target_arch = "wasm32")]
+pub use machine::wasm_machine::MepaMachine;
 
 #[derive(Serialize)]
 struct CompilationOutput {
