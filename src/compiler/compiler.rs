@@ -651,7 +651,7 @@ impl Compiler {
                 })?;
             if is_token!(self.tokens.next(), Token::OpenBrackets) {
                 self.tokens.consume()?;
-                self.generated_code.insert((None, Instruction::CREN(m, n)));
+                self.generated_code.insert((None, Instruction::CRVL(m, n)));
                 self.expression()?;
                 self.generated_code.insert((None, Instruction::SOMA));
                 self.generated_code.insert((
